@@ -1,65 +1,180 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+import ChatBox from '@/components/ChatBox';
+import ConnectorCard from '@/components/ConnectorCard';
+import styles from './page.module.css';
+import { GoogleTokens, ShopifyCredentials, MicrosoftTokens } from '@/lib/types';
 
 export default function Home() {
+  const [googleTokens, setGoogleTokens] = useState<GoogleTokens | null>(null);
+  const [shopifyConfig, setShopifyConfig] = useState<ShopifyCredentials | null>(null);
+  const [microsoftTokens, setMicrosoftTokens] = useState<MicrosoftTokens | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState<string>('');
+
+  useEffect(() => {
+    // Check for OAuth callbacks in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const googleTokensParam = urlParams.get('google_tokens');
+    const microsoftTokensParam = urlParams.get('microsoft_tokens');
+    const error = urlParams.get('error');
+
+    // Handle Google Tokens
+    if (googleTokensParam) {
+      try {
+        const tokens = JSON.parse(decodeURIComponent(googleTokensParam)) as GoogleTokens;
+        setGoogleTokens(tokens);
+        showNotification('Google connected successfully!');
+      } catch (err) {
+        console.error('Error parsing Google tokens:', err);
+        showNotification('Failed to connect Google');
+      }
+    }
+
+    // Handle Microsoft Tokens
+    if (microsoftTokensParam) {
+      try {
+        const tokens = JSON.parse(decodeURIComponent(microsoftTokensParam)) as MicrosoftTokens;
+        setMicrosoftTokens(tokens);
+        showNotification('Microsoft Teams connected successfully!');
+      } catch (err) {
+        console.error('Error parsing Microsoft tokens:', err);
+        showNotification('Failed to connect Microsoft Teams');
+      }
+    }
+
+    // Handle Errors
+    if (error) {
+      showNotification('Authentication failed');
+    }
+
+    // Clean URL if tokens or errors were present
+    if (googleTokensParam || microsoftTokensParam || error) {
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
+  const showNotification = (message: string) => {
+    setNotification(message);
+    setTimeout(() => setNotification(''), 3000);
+  };
+
+  /* ----------------- HANDLERS ----------------- */
+
+  const handleGoogleConnect = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/google/auth');
+      const data = await response.json();
+      window.location.href = data.url;
+    } catch (error) {
+      console.error('Error connecting Google:', error);
+      showNotification('Failed to initiate Google connection');
+      setLoading(false);
+    }
+  };
+
+  const handleShopifyConnect = async (data: { storeUrl: string; accessToken: string }) => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/shopify/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.config) {
+        setShopifyConfig(result.config);
+        showNotification('Shopify connected successfully!');
+      } else {
+        showNotification(result.error || 'Failed to connect Shopify');
+      }
+    } catch (error) {
+      console.error('Error connecting Shopify:', error);
+      showNotification('Failed to connect Shopify');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMicrosoftConnect = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/microsoft/auth');
+      const data = await response.json();
+      window.location.href = data.url;
+    } catch (error) {
+      console.error('Error connecting Microsoft:', error);
+      showNotification('Failed to initiate Microsoft connection');
+      setLoading(false);
+    }
+  };
+
+  /* ----------------- RENDER ----------------- */
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className={styles.container}>
+      {notification && (
+        <div className={styles.notification}>
+          {notification}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      )}
+
+      <header className={styles.header}>
+        <h1 className={styles.title}>🤖 AI Agent Dashboard</h1>
+        <p className={styles.subtitle}>Connect your services and let AI help you</p>
+      </header>
+
+      <div className={styles.content}>
+        <aside className={styles.sidebar}>
+          <h2 className={styles.sidebarTitle}>Connected Services</h2>
+          <div className={styles.connectors}>
+            
+            {/* Google Card */}
+            <ConnectorCard
+              title="Google"
+              description="Access Gmail, Drive, Docs & Sheets"
+              icon="📧"
+              connected={!!googleTokens}
+              onConnect={handleGoogleConnect}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+            {/* Shopify Card */}
+            <ConnectorCard
+              title="Shopify"
+              description="Manage your store and orders"
+              icon="🛍️"
+              connected={!!shopifyConfig}
+              onConnect={() => {}}
+              requiresInput={true}
+              onInputSubmit={handleShopifyConnect}
+            />
+
+            {/* Microsoft Card */}
+            <ConnectorCard
+              title="Microsoft Teams"
+              description="Access Teams messages and channels"
+              icon="💬"
+              connected={!!microsoftTokens}
+              onConnect={handleMicrosoftConnect}
+            />
+
+          </div>
+        </aside>
+
+        <main className={styles.main}>
+          <ChatBox 
+            googleTokens={googleTokens}
+            shopifyConfig={shopifyConfig}
+            microsoftTokens={microsoftTokens}
+          />
+        </main>
+      </div>
     </div>
   );
 }
