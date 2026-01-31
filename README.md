@@ -1,2 +1,0 @@
-# almyti
-office project
