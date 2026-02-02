@@ -7,14 +7,21 @@ interface ChatBoxProps {
   googleTokens: GoogleTokens | null;
   shopifyConfig: ShopifyCredentials | null;
   microsoftTokens: MicrosoftTokens | null;
+  // ✅ ADDED: Accept token as prop
+  telegramToken: string | null;
 }
 
-const ChatBox: React.FC<ChatBoxProps> = ({ googleTokens, shopifyConfig, microsoftTokens }) => {
+const ChatBox: React.FC<ChatBoxProps> = ({ 
+  googleTokens, 
+  shopifyConfig, 
+  microsoftTokens, 
+  telegramToken // ✅ Destructure it here
+}) => {
   const [messages, setMessages] = useState<MessageType[]>([
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m your AI assistant. I can help you with:\n- Show my latest emails\n- Fetch latest Drive files\n- Get my Shopify orders\n- Show Teams messages\n- List Teams channels\n\nWhat would you like to do?',
+      content: 'Hello! I\'m your AI assistant. I can help you with:\n- Show my latest emails (Gmail/Outlook)\n- Fetch Drive & OneDrive files\n- Get Shopify orders\n- Manage Telegram Groups & Messages\n- Show Teams messages\n\nWhat would you like to do?',
       timestamp: new Date()
     }
   ]);
@@ -45,6 +52,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({ googleTokens, shopifyConfig, microsof
     setLoading(true);
 
     try {
+      // ❌ REMOVED: const telegramToken = localStorage.getItem(...)
+      // We now use the `telegramToken` prop passed from the parent.
+
       const response = await fetch('/api/agent/query', {
         method: 'POST',
         headers: {
@@ -54,7 +64,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ googleTokens, shopifyConfig, microsof
           query: input,
           googleTokens,
           shopifyConfig,
-          microsoftTokens
+          microsoftTokens,
+          telegramToken // ✅ Pass the prop value
         })
       });
 

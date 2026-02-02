@@ -72,12 +72,17 @@ export async function readSheet({
 }: ReadSheetOptions): Promise<any[][]> {
   const sheets = await getSheetsClient();
 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range,
-  });
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    });
 
-  return res.data.values ?? [];
+    return res.data.values ?? [];
+  } catch (error) {
+    console.error(`Error reading sheet (ID: ${spreadsheetId}, Range: ${range}):`, error);
+    throw new Error('Failed to read Google Sheet data.');
+  }
 }
 
 /* ===================================================== */
@@ -91,12 +96,17 @@ export async function updateSheet({
 }: UpdateSheetOptions): Promise<void> {
   const sheets = await getSheetsClient();
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: {
-      values,
-    },
-  });
+  try {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values,
+      },
+    });
+  } catch (error) {
+    console.error(`Error updating sheet (ID: ${spreadsheetId}, Range: ${range}):`, error);
+    throw new Error('Failed to update Google Sheet.');
+  }
 }

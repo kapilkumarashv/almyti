@@ -8,7 +8,10 @@ interface ConnectorCardProps {
   onConnect: () => void;
   icon?: string;
   requiresInput?: boolean;
-  onInputSubmit?: (data: { storeUrl: string; accessToken: string }) => Promise<void>;
+  // ✅ ADDED: Type to distinguish between services
+  serviceType?: 'shopify' | 'telegram' | 'default';
+  // ✅ UPDATED: Callback now accepts generic data
+  onInputSubmit?: (data: any) => Promise<void>;
 }
 
 const ConnectorCard: React.FC<ConnectorCardProps> = ({
@@ -18,12 +21,18 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
   onConnect,
   icon,
   requiresInput,
+  serviceType = 'default',
   onInputSubmit
 }) => {
   const [showInput, setShowInput] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Shopify State
   const [storeUrl, setStoreUrl] = useState('');
   const [accessToken, setAccessToken] = useState('');
-  const [loading, setLoading] = useState(false);
+
+  // Telegram State
+  const [botToken, setBotToken] = useState('');
 
   const handleConnect = () => {
     if (requiresInput && !connected) {
@@ -38,7 +47,11 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
     setLoading(true);
     
     if (onInputSubmit) {
-      await onInputSubmit({ storeUrl, accessToken });
+      if (serviceType === 'shopify') {
+        await onInputSubmit({ storeUrl, accessToken });
+      } else if (serviceType === 'telegram') {
+        await onInputSubmit({ botToken });
+      }
     }
     
     setLoading(false);
@@ -65,22 +78,41 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
         </button>
       ) : (
         <form onSubmit={handleSubmit} className={styles.form}>
-          <input
-            type="text"
-            placeholder="Store URL (e.g., mystore.myshopify.com)"
-            value={storeUrl}
-            onChange={(e) => setStoreUrl(e.target.value)}
-            className={styles.input}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Access Token"
-            value={accessToken}
-            onChange={(e) => setAccessToken(e.target.value)}
-            className={styles.input}
-            required
-          />
+          
+          {/* ✅ SHOPIFY INPUTS */}
+          {serviceType === 'shopify' && (
+            <>
+              <input
+                type="text"
+                placeholder="Store URL (e.g., mystore.myshopify.com)"
+                value={storeUrl}
+                onChange={(e) => setStoreUrl(e.target.value)}
+                className={styles.input}
+                required
+              />
+              <input
+                type="password"
+                placeholder="Shopify Access Token"
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+                className={styles.input}
+                required
+              />
+            </>
+          )}
+
+          {/* ✅ TELEGRAM INPUTS */}
+          {serviceType === 'telegram' && (
+            <input
+              type="password"
+              placeholder="Telegram Bot Token (from @BotFather)"
+              value={botToken}
+              onChange={(e) => setBotToken(e.target.value)}
+              className={styles.input}
+              required
+            />
+          )}
+
           <div className={styles.formButtons}>
             <button
               type="button"

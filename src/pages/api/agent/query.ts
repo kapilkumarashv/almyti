@@ -1,12 +1,12 @@
-// pages/api/agent/query.ts
 import { NextApiRequest, NextApiResponse } from 'next';
-import { processQuery, getAuthClient } from '@/lib/agent/processor';
-import { getEmails } from '@/lib/google/gmail';
-import { getLatestFiles } from '@/lib/google/drive';
-import { getLatestOrders, testShopifyConnection, ShopifyConfig } from '@/lib/shopify/api';
-import { getRecentTeamsMessages, getTeamsChannels } from '@/lib/microsoft/teams'; // Ensure this file exists
-import { generateSummary } from '@/lib/ai/client';
-import { ShopifyCredentials, MicrosoftTokens } from '@/lib/types';
+// ✅ Relative imports for stability
+import { processQuery, getAuthClient } from '../../../lib/agent/processor';
+import { getEmails } from '../../../lib/google/gmail';
+import { getLatestFiles } from '../../../lib/google/drive';
+import { getLatestOrders, testShopifyConnection, ShopifyConfig } from '../../../lib/shopify/api';
+import { getRecentTeamsMessages, getTeamsChannels } from '../../../lib/microsoft/teams';
+import { generateSummary } from '../../../lib/ai/client';
+import { ShopifyCredentials, MicrosoftTokens } from '../../../lib/types';
 
 /* ----------------- Extend AgentResponse ----------------- */
 export interface AIIntentParameters {
@@ -18,18 +18,35 @@ export interface AIIntentParameters {
   body?: string;
   filter?: string;
 
-  // Sheets
+  // Sheets & Notes & Docs & Word & Excel
+  title?: string;
+  
+  // Sheets / Excel
   spreadsheetId?: string;
   sheetName?: string;
   range?: string;
   values?: string[][];
 
-  // Docs
+  // Docs / Word
   documentId?: string;
   content?: string;
   text?: string;
   findText?: string;
   replaceText?: string;
+
+  // Classroom Parameters
+  courseName?: string;
+  studentName?: string;
+  name?: string; 
+  section?: string;
+  room?: string;
+  description?: string;
+
+  // Telegram Parameters
+  chatId?: string;
+  action?: string;
+  userId?: number;
+  messageId?: number;
 }
 
 export interface AgentResponseExtended {
@@ -48,6 +65,26 @@ export interface AgentResponseExtended {
     | 'append_doc'
     | 'replace_doc'
     | 'clear_doc'
+    | 'fetch_notes'
+    | 'create_note'
+    | 'fetch_courses'
+    | 'create_course'
+    | 'fetch_assignments'
+    | 'fetch_students'
+    // MICROSOFT ACTIONS
+    | 'fetch_outlook_emails'
+    | 'send_outlook_email'
+    | 'create_outlook_event'
+    | 'fetch_onedrive_files'
+    | 'create_word_doc'
+    | 'read_word_doc'
+    | 'create_excel_sheet'
+    | 'read_excel_sheet'
+    | 'update_excel_sheet'
+    // ✅ TELEGRAM ACTIONS
+    | 'fetch_telegram_updates'
+    | 'send_telegram_message'
+    | 'manage_telegram_group'
     | 'help'
     | 'none';
 
@@ -60,6 +97,7 @@ interface QueryRequestBody {
   query: string;
   shopifyConfig?: ShopifyCredentials;
   microsoftTokens?: MicrosoftTokens;
+  telegramToken?: string; // ✅ ADDED
 }
 
 /* ----------------- API Handler ----------------- */
@@ -72,29 +110,35 @@ export default async function handler(
   }
 
   try {
-    const { query, shopifyConfig, microsoftTokens } = req.body as QueryRequestBody;
+    const { query, shopifyConfig, microsoftTokens, telegramToken } = req.body as QueryRequestBody;
 
     if (!query) {
       return res.status(400).json({ error: 'Missing query' });
     }
 
-    // Determine AI intent
-    const response = (await processQuery(query, shopifyConfig)) as AgentResponseExtended;
+    // Determine AI intent & Execute Core Logic (Processor)
+    // ✅ FIX: Pass telegramToken to the processor
+    const response = (await processQuery(query, shopifyConfig, microsoftTokens, telegramToken)) as AgentResponseExtended;
 
     // Ensure parameters exist
     const params: AIIntentParameters = response.parameters || { limit: 5, search: '' };
 
-    /* ----------------- FETCH EMAILS ----------------- */
+    /* =================================================================================
+       GOOGLE INTEGRATIONS
+       ================================================================================= */
+
+    /* ----------------- FETCH EMAILS (GMAIL) ----------------- */
     if (response.action === 'fetch_emails') {
       try {
-        const emails = await getEmails({
-          search: params.search,
-          date: params.date,
-          limit: params.limit,
-        });
-
-        const summary = await generateSummary(emails, query, 'emails');
-        response.data = emails;
+        if (!response.data) {
+          const emails = await getEmails({
+            search: params.search,
+            date: params.date,
+            limit: params.limit,
+          });
+          response.data = emails;
+        }
+        const summary = await generateSummary(response.data, query, 'emails');
         response.message = summary;
       } catch (err) {
         console.error('Error fetching Gmail emails:', err);
@@ -102,14 +146,15 @@ export default async function handler(
       }
     }
 
-    /* ----------------- FETCH FILES ----------------- */
+    /* ----------------- FETCH FILES (DRIVE) ----------------- */
     if (response.action === 'fetch_files') {
       try {
-        const auth = await getAuthClient();
-        const files = await getLatestFiles(auth, params.limit || 5);
-        const summary = await generateSummary(files, query, 'files');
-
-        response.data = files;
+        if (!response.data) {
+          const auth = await getAuthClient();
+          const files = await getLatestFiles(auth, params.limit || 5);
+          response.data = files;
+        }
+        const summary = await generateSummary(response.data, query, 'files');
         response.message = summary;
       } catch (err) {
         console.error('Error fetching Drive files:', err);
@@ -117,96 +162,161 @@ export default async function handler(
       }
     }
 
-    /* ----------------- FETCH ORDERS (SHOPIFY) ----------------- */
-    if (response.action === 'fetch_orders') {
-      if (!shopifyConfig) {
-        response.message = '❌ Please connect your Shopify store first to access orders.';
-      } else {
-        try {
-          // Check Shopify connection
-          const isConnected = await testShopifyConnection(shopifyConfig);
-          if (!isConnected) {
-            response.message =
-              '❌ Cannot connect to Shopify. Please check your store URL and access token.';
-          } else {
-            // Normalize Shopify config
-            const config: ShopifyConfig = {
-              apiKey: shopifyConfig.apiKey || '',
-              apiSecret: shopifyConfig.apiSecret || '',
-              storeUrl: shopifyConfig.storeUrl,
-              accessToken: shopifyConfig.accessToken,
-            };
-
-            // Optional date filter for Shopify API
-            const dateFilter = params.date
-              ? {
-                  created_at_min: `${params.date}T00:00:00Z`,
-                  created_at_max: `${params.date}T23:59:59Z`,
-                }
-              : undefined;
-
-            // Fetch orders
-            const orders = await getLatestOrders(config, params.limit || 5, dateFilter);
-            const summary = await generateSummary(orders, query, 'orders');
-
-            response.data = orders;
-            response.message = summary;
-          }
-        } catch (err) {
-          console.error('Shopify fetch error:', err);
-          response.message =
-            '❌ Failed to fetch Shopify orders. Please check your credentials and connection.';
+    /* ----------------- FETCH NOTES (KEEP) ----------------- */
+    if (response.action === 'fetch_notes') {
+      try {
+        if (response.data && Array.isArray(response.data)) {
+          const summary = await generateSummary(response.data, query, 'notes');
+          response.message = summary;
         }
-      }
+      } catch (err) { console.error('Error summarizing Keep notes:', err); }
     }
 
-    /* ----------------- MICROSOFT TEAMS MESSAGES ----------------- */
+    /* ----------------- GOOGLE CLASSROOM ----------------- */
+    if (response.action === 'fetch_courses') {
+      try { if (response.data) response.message = await generateSummary(response.data, query, 'courses'); } catch (e) {}
+    }
+    if (response.action === 'fetch_assignments') {
+      try { if (response.data) response.message = await generateSummary(response.data, query, 'assignments'); } catch (e) {}
+    }
+    if (response.action === 'fetch_students') {
+      try { if (response.data) response.message = await generateSummary(response.data, query, 'students'); } catch (e) {}
+    }
+
+    /* =================================================================================
+       MICROSOFT INTEGRATIONS
+       ================================================================================= */
+
+    /* ----------------- OUTLOOK MAIL ----------------- */
+    if (response.action === 'fetch_outlook_emails') {
+      try {
+        if (response.data && Array.isArray(response.data)) {
+          const summary = await generateSummary(response.data, query, 'outlook_emails');
+          response.message = summary;
+        }
+      } catch (err) { console.error('Error summarizing Outlook emails:', err); }
+    }
+
+    /* ----------------- ONEDRIVE FILES ----------------- */
+    if (response.action === 'fetch_onedrive_files') {
+      try {
+        if (response.data && Array.isArray(response.data)) {
+          const summary = await generateSummary(response.data, query, 'onedrive_files');
+          response.message = summary;
+        }
+      } catch (err) { console.error('Error summarizing OneDrive files:', err); }
+    }
+
+    /* ----------------- EXCEL ----------------- */
+    if (response.action === 'read_excel_sheet') {
+      try {
+        if (response.data) {
+          const summary = await generateSummary(response.data, query, 'excel_sheet');
+          response.message = summary;
+        }
+      } catch (err) { console.error('Error summarizing Excel data:', err); }
+    }
+
+    /* ----------------- TEAMS (Manual Fetch Fallback) ----------------- */
     if (response.action === 'fetch_teams_messages') {
       if (!microsoftTokens) {
         response.message = '❌ Please connect your Microsoft Teams account first.';
       } else {
         try {
-          const messages = await getRecentTeamsMessages(
-            microsoftTokens.access_token,
-            params.limit || 5
-          );
-          // Ensure generateSummary handles 'teams_messages'
-          const summary = await generateSummary(messages, query, 'teams_messages');
-          
-          response.data = messages;
+          if (!response.data) {
+             const messages = await getRecentTeamsMessages(
+               microsoftTokens.access_token,
+               params.limit || 5
+             );
+             response.data = messages;
+          }
+          const summary = await generateSummary(response.data, query, 'teams_messages');
           response.message = summary;
         } catch (err) {
           console.error('Error fetching Teams messages:', err);
-          response.message = '⚠️ Failed to fetch Teams messages. Please reconnect your account.';
+          response.message = '⚠️ Failed to fetch Teams messages.';
         }
       }
     }
 
-    /* ----------------- MICROSOFT TEAMS CHANNELS ----------------- */
     if (response.action === 'fetch_teams_channels') {
       if (!microsoftTokens) {
         response.message = '❌ Please connect your Microsoft Teams account first.';
       } else {
         try {
-          const channels = await getTeamsChannels(
-            microsoftTokens.access_token,
-            params.limit || 10
-          );
-          // Ensure generateSummary handles 'teams_channels'
-          const summary = await generateSummary(channels, query, 'teams_channels');
-
-          response.data = channels;
+          if (!response.data) {
+             const channels = await getTeamsChannels(
+               microsoftTokens.access_token,
+               params.limit || 10
+             );
+             response.data = channels;
+          }
+          const summary = await generateSummary(response.data, query, 'teams_channels');
           response.message = summary;
         } catch (err) {
           console.error('Error fetching Teams channels:', err);
-          response.message = '⚠️ Failed to fetch Teams channels. Please reconnect your account.';
+          response.message = '⚠️ Failed to fetch Teams channels.';
         }
       }
     }
 
-    /* ----------------- CREATE GOOGLE MEET ----------------- */
-    if (response.action === 'create_meet') {
-      response.message = response.message || '✅ Google Meet created successfully!';
+    /* =================================================================================
+       ✅ TELEGRAM INTEGRATION (NEW)
+       ================================================================================= */
+    if (response.action === 'fetch_telegram_updates') {
+      try {
+        if (response.data && Array.isArray(response.data)) {
+          const summary = await generateSummary(response.data, query, 'telegram_messages');
+          response.message = summary;
+        }
+      } catch (err) { console.error('Error summarizing Telegram messages:', err); }
+    }
+
+    /* =================================================================================
+       SHOPIFY
+       ================================================================================= */
+    if (response.action === 'fetch_orders') {
+      if (!shopifyConfig) {
+        response.message = '❌ Please connect your Shopify store first to access orders.';
+      } else {
+        try {
+          if (!response.data) {
+             const isConnected = await testShopifyConnection(shopifyConfig);
+             if (!isConnected) {
+               response.message = '❌ Cannot connect to Shopify. Check store URL and token.';
+             } else {
+                const config: ShopifyConfig = {
+                  apiKey: shopifyConfig.apiKey || '',
+                  apiSecret: shopifyConfig.apiSecret || '',
+                  storeUrl: shopifyConfig.storeUrl,
+                  accessToken: shopifyConfig.accessToken,
+                };
+                
+                const dateFilter = params.date
+                  ? {
+                      created_at_min: `${params.date}T00:00:00Z`,
+                      created_at_max: `${params.date}T23:59:59Z`,
+                    }
+                  : undefined;
+                
+                response.data = await getLatestOrders(config, params.limit || 5, dateFilter);
+             }
+          }
+
+          if (response.data) {
+            const summary = await generateSummary(response.data, query, 'orders');
+            response.message = summary;
+          }
+        } catch (err) {
+          console.error('Shopify fetch error:', err);
+          response.message = '❌ Failed to fetch Shopify orders.';
+        }
+      }
+    }
+
+    /* ----------------- CREATE MEET ----------------- */
+    if (response.action === 'create_meet' || response.action === 'create_outlook_event') {
+      // Message is already set by processor
     }
 
     /* ----------------- DEFAULT / HELP ----------------- */

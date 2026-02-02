@@ -10,6 +10,11 @@ export default function Home() {
   const [googleTokens, setGoogleTokens] = useState<GoogleTokens | null>(null);
   const [shopifyConfig, setShopifyConfig] = useState<ShopifyCredentials | null>(null);
   const [microsoftTokens, setMicrosoftTokens] = useState<MicrosoftTokens | null>(null);
+  
+  // ✅ CHANGED: Store the actual token string here (Session only)
+  // We no longer use a simple boolean "connected" flag for Telegram
+  const [telegramToken, setTelegramToken] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<string>('');
 
@@ -28,7 +33,6 @@ export default function Home() {
         showNotification('Google connected successfully!');
       } catch (err) {
         console.error('Error parsing Google tokens:', err);
-        showNotification('Failed to connect Google');
       }
     }
 
@@ -40,16 +44,18 @@ export default function Home() {
         showNotification('Microsoft Teams connected successfully!');
       } catch (err) {
         console.error('Error parsing Microsoft tokens:', err);
-        showNotification('Failed to connect Microsoft Teams');
       }
     }
+
+    // ❌ REMOVED: Do NOT check localStorage for Telegram token
+    // We want the user to connect manually every time.
 
     // Handle Errors
     if (error) {
       showNotification('Authentication failed');
     }
 
-    // Clean URL if tokens or errors were present
+    // Clean URL
     if (googleTokensParam || microsoftTokensParam || error) {
       window.history.replaceState({}, '', '/');
     }
@@ -80,14 +86,10 @@ export default function Home() {
     try {
       const response = await fetch('/api/shopify/connect', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
-
       const result = await response.json();
-      
       if (response.ok && result.config) {
         setShopifyConfig(result.config);
         showNotification('Shopify connected successfully!');
@@ -95,7 +97,6 @@ export default function Home() {
         showNotification(result.error || 'Failed to connect Shopify');
       }
     } catch (error) {
-      console.error('Error connecting Shopify:', error);
       showNotification('Failed to connect Shopify');
     } finally {
       setLoading(false);
@@ -109,9 +110,18 @@ export default function Home() {
       const data = await response.json();
       window.location.href = data.url;
     } catch (error) {
-      console.error('Error connecting Microsoft:', error);
       showNotification('Failed to initiate Microsoft connection');
       setLoading(false);
+    }
+  };
+
+  // ✅ CHANGED: Do NOT save to localStorage. Just set state.
+  const handleTelegramConnect = async (data: any) => {
+    if (data.botToken) {
+      setTelegramToken(data.botToken); // Only saves in memory
+      showNotification('Telegram Bot connected for this session!');
+    } else {
+      showNotification('Invalid Telegram Token');
     }
   };
 
@@ -135,7 +145,6 @@ export default function Home() {
           <h2 className={styles.sidebarTitle}>Connected Services</h2>
           <div className={styles.connectors}>
             
-            {/* Google Card */}
             <ConnectorCard
               title="Google"
               description="Access Gmail, Drive, Docs & Sheets"
@@ -144,7 +153,14 @@ export default function Home() {
               onConnect={handleGoogleConnect}
             />
 
-            {/* Shopify Card */}
+            <ConnectorCard
+              title="Microsoft 365"
+              description="Access Teams, Outlook, OneDrive"
+              icon="🟦"
+              connected={!!microsoftTokens}
+              onConnect={handleMicrosoftConnect}
+            />
+
             <ConnectorCard
               title="Shopify"
               description="Manage your store and orders"
@@ -152,26 +168,32 @@ export default function Home() {
               connected={!!shopifyConfig}
               onConnect={() => {}}
               requiresInput={true}
+              serviceType="shopify"
               onInputSubmit={handleShopifyConnect}
             />
 
-            {/* Microsoft Card */}
+            {/* ✅ UPDATED: Pass boolean based on state, not storage */}
             <ConnectorCard
-              title="Microsoft Teams"
-              description="Access Teams messages and channels"
-              icon="💬"
-              connected={!!microsoftTokens}
-              onConnect={handleMicrosoftConnect}
+              title="Telegram Bot"
+              description="Manage groups & read messages"
+              icon="✈️"
+              connected={!!telegramToken}
+              onConnect={() => {}}
+              requiresInput={true}
+              serviceType="telegram"
+              onInputSubmit={handleTelegramConnect}
             />
 
           </div>
         </aside>
 
         <main className={styles.main}>
+          {/* ✅ UPDATED: Pass the token string directly to ChatBox */}
           <ChatBox 
             googleTokens={googleTokens}
             shopifyConfig={shopifyConfig}
             microsoftTokens={microsoftTokens}
+            telegramToken={telegramToken}
           />
         </main>
       </div>

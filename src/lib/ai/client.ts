@@ -35,21 +35,61 @@ MICROSOFT TEAMS RULES:
 - fetch_teams_channels: List Teams channels.
 - Use "search" or "filter" only if explicitly mentioned.
 
-EMAIL RULES:
-- fetch_emails: only if user explicitly asks to read emails.
-- send_email: only if user explicitly asks to send emails.
+MICROSOFT OUTLOOK RULES (MAIL & CALENDAR):
+- fetch_outlook_emails: User explicitly asks for "Outlook emails" or "Microsoft emails".
+- send_outlook_email: User explicitly asks to send an email via "Outlook".
+- create_outlook_event: User asks to schedule a meeting/event in "Outlook" or "Microsoft Calendar".
+  - Extract "subject", "date", "time".
+
+MICROSOFT FILES RULES (ONEDRIVE, WORD, EXCEL):
+- fetch_onedrive_files: User asks to list "OneDrive" files.
+- create_word_doc: User asks to create a "Word" document. Extract "title".
+- read_word_doc: User asks to read/view a "Word" document. Extract "title".
+- create_excel_sheet: User asks to create an "Excel" sheet/workbook. Extract "title".
+- read_excel_sheet: User asks to read an "Excel" sheet. Extract "title".
+- update_excel_sheet: User asks to update/add rows to an "Excel" sheet. Extract "title" and "values".
+
+TELEGRAM BOT RULES:
+- fetch_telegram_updates: User asks to check, read, or get new Telegram messages/updates.
+- send_telegram_message: User asks to send a message via Telegram.
+  - Extract "chatId" (this might be a username like "@channel" or a number).
+  - Extract "text" (the message content).
+- manage_telegram_group: User asks to perform admin actions (kick, pin, promote, set title).
+  - Extract "chatId".
+  - Extract "action" (kick, pin, promote, title).
+  - Extract "userId" (if kicking/promoting) or "messageId" (if pinning).
+  - If action is "title", extract the new title text into "value".
+
+EMAIL RULES (GMAIL):
+- fetch_emails: only if user explicitly asks to read emails (default to Gmail if "Outlook" not specified).
+- send_email: only if user explicitly asks to send emails (default to Gmail).
 - Include "date" ONLY if explicitly mentioned.
 - Use "search" only if sender, subject, or keyword is mentioned.
 
+GOOGLE CLASSROOM RULES:
+- fetch_courses: User asks to list classes, courses, or classrooms.
+- create_course: User asks to create a new class/course. Extract "name" (or "title"), "section", "description", "room".
+- fetch_assignments: User asks for assignments, homework, or classwork.
+  - Extract "courseName" if user specifies a class (e.g., "assignments for Math").
+- fetch_students: User asks for students, roster, or people in a class.
+  - Extract "courseName" if specified.
+  - Extract "studentName" if looking for a specific person.
+
 GOOGLE DOCS RULES:
 - create_doc: only if user explicitly asks to create a Google Doc.
-- read_doc: only if user asks to read/view a document.
-- append_doc: only if user asks to add content to an existing document.
-- replace_doc: only if user asks to replace specific text.
-- clear_doc: only if user asks to clear the document.
+- read_doc: only if user asks to read/view a document. Extract "title" (filename) or "documentId".
+- append_doc: only if user asks to add content to an existing document. Extract "title" (filename) or "documentId".
+- replace_doc: only if user asks to replace specific text. Extract "title" (filename) or "documentId".
+- clear_doc: only if user asks to clear the document. Extract "title" (filename) or "documentId".
 - NEVER invent documentId, title, or content.
-- If documentId is missing, omit it and rely on context.
+- If documentId is missing, check if "title" is provided.
 - Do NOT summarize or rewrite document content unless explicitly asked.
+
+GOOGLE KEEP (NOTES) RULES:
+- fetch_notes: only if user asks to see, list, or find notes.
+- create_note: only if user asks to create, add, or make a new note.
+- Extract "title" and "content" if provided.
+- If no title is given, omit it (backend will handle defaults).
 
 GOOGLE MEET RULES:
 - create_meet: only if user wants to create a Google Meet.
@@ -64,10 +104,10 @@ GOOGLE MEET RULES:
 
 GOOGLE SHEETS RULES:
 - create_sheet: only if user explicitly asks to create a spreadsheet.
-- read_sheet: only if user asks to read/view sheet data.
-- update_sheet: only if user asks to modify/update existing sheet values.
+- read_sheet: only if user asks to read/view sheet data. Extract "title" (filename) or "spreadsheetId".
+- update_sheet: only if user asks to modify/update existing sheet values. Extract "title" (filename) or "spreadsheetId".
 - NEVER invent spreadsheetId, range, or values.
-- If spreadsheetId or range is missing, omit it and rely on context.
+- If spreadsheetId is missing, check if "title" is provided.
 - Do NOT guess sheet names, columns, or cell ranges.
 
 GENERAL RULES:
@@ -81,6 +121,18 @@ Available actions:
 - fetch_orders
 - fetch_teams_messages
 - fetch_teams_channels
+- fetch_outlook_emails
+- send_outlook_email
+- create_outlook_event
+- fetch_onedrive_files
+- create_word_doc
+- read_word_doc
+- create_excel_sheet
+- read_excel_sheet
+- update_excel_sheet
+- fetch_telegram_updates
+- send_telegram_message
+- manage_telegram_group
 - create_meet
 - delete_meet
 - update_meet
@@ -92,6 +144,12 @@ Available actions:
 - append_doc
 - replace_doc
 - clear_doc
+- fetch_notes
+- create_note
+- fetch_courses
+- create_course
+- fetch_assignments
+- fetch_students
 - help
 - none
 
@@ -101,9 +159,15 @@ RESPONSE FORMAT (JSON ONLY):
 {
   "action": "fetch_emails" | "send_email" | "fetch_files" | "fetch_orders"
            | "fetch_teams_messages" | "fetch_teams_channels"
+           | "fetch_outlook_emails" | "send_outlook_email" | "create_outlook_event"
+           | "fetch_onedrive_files" | "create_word_doc" | "read_word_doc"
+           | "create_excel_sheet" | "read_excel_sheet" | "update_excel_sheet"
+           | "fetch_telegram_updates" | "send_telegram_message" | "manage_telegram_group"
            | "create_meet" | "delete_meet" | "update_meet"
            | "create_sheet" | "read_sheet" | "update_sheet"
            | "create_doc" | "read_doc" | "append_doc" | "replace_doc" | "clear_doc"
+           | "fetch_notes" | "create_note"
+           | "fetch_courses" | "create_course" | "fetch_assignments" | "fetch_students"
            | "help" | "none",
   "usesContext": boolean,
   "parameters": {
@@ -116,16 +180,33 @@ RESPONSE FORMAT (JSON ONLY):
     "subject": "email subject or meeting title",
     "body": "email body or meeting description",
 
-    // Sheets
-    "title": "spreadsheet title",
+    // Telegram
+    "chatId": "Telegram chat ID or username",
+    "action": "kick, pin, promote, title",
+    "userId": "Telegram user ID",
+    "messageId": "Telegram message ID",
+    "value": "The new title for the group",
+
+    // Docs, Sheets & Notes
+    "title": "filename, spreadsheet title, or note title",
     "sheetName": "optional sheet name",
-    "spreadsheetId": "existing spreadsheet id",
+    "spreadsheetId": "existing spreadsheet id (optional if title is given)",
+    "documentId": "google document id (optional if title is given)",
+    
+    // Classroom
+    "courseName": "name of the course/class for lookups",
+    "studentName": "name of the student to find",
+    "name": "name for creating a course",
+    "section": "course section",
+    "room": "room number",
+    "description": "course description",
+
+    // Sheet Data
     "range": "Sheet1!A1:C10",
     "values": [["row1col1", "row1col2"]],
 
-    // Docs
-    "documentId": "google document id",
-    "content": "text to write",
+    // Doc Content
+    "content": "text to write (for docs or notes)",
     "text": "text to append",
     "findText": "text to find",
     "replaceText": "replacement text"
@@ -162,6 +243,17 @@ async function parseUserIntent(query: string): Promise<AIIntent> {
       parsed.parameters.values = normalizeSheetValues(parsed.parameters.values);
     }
 
+    // Ensure 'name' exists for create_course to satisfy TypeScript & Runtime
+    if (parsed.action === 'create_course') {
+      if (!parsed.parameters) parsed.parameters = {};
+      if (!parsed.parameters.name && !parsed.parameters.title) {
+         parsed.parameters.name = 'New Classroom';
+      } else if (parsed.parameters.title && !parsed.parameters.name) {
+         // Map title to name if the AI got confused
+         parsed.parameters.name = parsed.parameters.title;
+      }
+    }
+
     return {
       action: parsed.action ?? 'none',
       usesContext: parsed.usesContext === true,
@@ -185,7 +277,75 @@ function fallbackParsing(query: string): AIIntent {
     q.includes('previous meeting') ||
     q.includes('the meeting');
 
-  // Microsoft Teams (New)
+  /* -------------------- TELEGRAM FALLBACKS -------------------- */
+  if (q.includes('telegram')) {
+    if (q.includes('send') || q.includes('tell') || q.includes('reply')) {
+      return {
+        action: 'send_telegram_message',
+        parameters: {},
+        naturalResponse: 'Who should I message on Telegram?'
+      };
+    }
+    if (q.includes('kick') || q.includes('ban') || q.includes('pin')) {
+      return {
+        action: 'manage_telegram_group',
+        parameters: {},
+        naturalResponse: 'I can manage the group. What is the action?'
+      };
+    }
+    // Default: Check updates
+    return {
+      action: 'fetch_telegram_updates',
+      parameters: { limit: 5 },
+      naturalResponse: 'Checking for new Telegram messages...'
+    };
+  }
+
+  /* -------------------- MICROSOFT FALLBACKS -------------------- */
+  
+  // Outlook
+  if (q.includes('outlook')) {
+      if (q.includes('email') || q.includes('mail')) {
+          if (q.includes('send')) {
+              return { action: 'send_outlook_email', parameters: {}, naturalResponse: 'Who should I email via Outlook?' };
+          }
+          return { action: 'fetch_outlook_emails', parameters: { limit: 5 }, naturalResponse: 'Checking your Outlook emails.' };
+      }
+      if (q.includes('calendar') || q.includes('event') || q.includes('meeting')) {
+          return { action: 'create_outlook_event', parameters: {}, naturalResponse: 'I can schedule that in Outlook. What time?' };
+      }
+  }
+
+  // Word
+  if (q.includes('word') && (q.includes('doc') || q.includes('file'))) {
+      if (q.includes('create') || q.includes('new')) {
+          return { action: 'create_word_doc', parameters: {}, naturalResponse: 'Creating a new Word document.' };
+      }
+      if (q.includes('read') || q.includes('view')) {
+          return { action: 'read_word_doc', parameters: {}, naturalResponse: 'Reading the Word document.' };
+      }
+  }
+
+  // Excel
+  if (q.includes('excel')) {
+      if (q.includes('create') || q.includes('new')) {
+          return { action: 'create_excel_sheet', parameters: {}, naturalResponse: 'Creating a new Excel workbook.' };
+      }
+      if (q.includes('update') || q.includes('add')) {
+          return { action: 'update_excel_sheet', parameters: {}, naturalResponse: 'Updating the Excel sheet.' };
+      }
+      return { action: 'read_excel_sheet', parameters: {}, naturalResponse: 'Reading the Excel sheet.' };
+  }
+
+  // OneDrive
+  if (q.includes('onedrive')) {
+      return { action: 'fetch_onedrive_files', parameters: { limit: 5 }, naturalResponse: 'Fetching OneDrive files.' };
+  }
+
+
+  /* -------------------- EXISTING FALLBACKS -------------------- */
+
+  // Microsoft Teams
   if (q.includes('teams') || q.includes('message') || q.includes('chat')) {
     if (q.includes('channel')) {
       return {
@@ -194,11 +354,41 @@ function fallbackParsing(query: string): AIIntent {
         naturalResponse: 'Fetching your Teams channels...'
       };
     }
-    // Default to messages if "teams" or "chat" is mentioned
     return {
       action: 'fetch_teams_messages',
       parameters: { limit: 5 },
       naturalResponse: 'Fetching your latest Teams messages...'
+    };
+  }
+
+  // Google Classroom (Fallback)
+  if (q.includes('classroom') || q.includes('class') || q.includes('course') || q.includes('assignment') || q.includes('student')) {
+    if (q.includes('create') || q.includes('new')) {
+       return {
+         action: 'create_course',
+         parameters: { name: 'New Classroom' },
+         naturalResponse: 'I can create a new Google Classroom for you. What should I name it?'
+       };
+    }
+    if (q.includes('assignment') || q.includes('homework')) {
+       return {
+         action: 'fetch_assignments',
+         parameters: { limit: 10 },
+         naturalResponse: 'Fetching your latest assignments.'
+       };
+    }
+    if (q.includes('student') || q.includes('people')) {
+       return {
+         action: 'fetch_students',
+         parameters: {},
+         naturalResponse: 'Fetching students from your class.'
+       };
+    }
+    // Default to listing courses
+    return {
+       action: 'fetch_courses',
+       parameters: { limit: 10 },
+       naturalResponse: 'Fetching your Google Classrooms.'
     };
   }
 
@@ -338,12 +528,30 @@ function fallbackParsing(query: string): AIIntent {
     }
   }
 
+  // Google Keep (Notes)
+  if (q.includes('note') || q.includes('keep') || q.includes('list')) {
+    if (q.includes('create') || q.includes('new') || q.includes('add')) {
+      return {
+        action: 'create_note',
+        usesContext: false,
+        parameters: {},
+        naturalResponse: 'I can create a new note in Google Keep.',
+      };
+    }
+    return {
+      action: 'fetch_notes',
+      usesContext: false,
+      parameters: { limit: 10 },
+      naturalResponse: 'Fetching your latest notes from Google Keep.',
+    };
+  }
+
   // Default help
   return {
     action: 'help',
     usesContext: false,
     parameters: {},
-    naturalResponse: 'I can help with Gmail, Drive, Shopify, Google Meet, Google Sheets, and Microsoft Teams.',
+    naturalResponse: 'I can help with Gmail, Drive, Classroom, Shopify, Google Meet, Sheets, Docs, Keep, Teams, and Telegram.',
   };
 }
 
@@ -351,12 +559,39 @@ function fallbackParsing(query: string): AIIntent {
 async function generateSummary(
   data: unknown[],
   query: string,
-  dataType: 'emails' | 'files' | 'orders' | 'teams_messages' | 'teams_channels'
+  dataType: 
+    | 'emails' 
+    | 'files' 
+    | 'orders' 
+    | 'teams_messages' 
+    | 'teams_channels' 
+    | 'notes' 
+    | 'courses' 
+    | 'assignments' 
+    | 'students'
+    | 'outlook_emails'
+    | 'outlook_event'
+    | 'onedrive_files'
+    | 'word_doc'
+    | 'excel_sheet'
+    // ✅ NEW TYPES
+    | 'telegram_messages'
 ): Promise<string> {
   try {
     let dataLabel: string = dataType;
     if (dataType === 'teams_messages') dataLabel = 'Teams Messages';
     if (dataType === 'teams_channels') dataLabel = 'Teams Channels';
+    if (dataType === 'notes') dataLabel = 'Google Keep Notes';
+    if (dataType === 'courses') dataLabel = 'Google Classrooms';
+    if (dataType === 'assignments') dataLabel = 'Class assignments';
+    if (dataType === 'students') dataLabel = 'Class students';
+    if (dataType === 'outlook_emails') dataLabel = 'Outlook Emails';
+    if (dataType === 'outlook_event') dataLabel = 'Calendar Event';
+    if (dataType === 'onedrive_files') dataLabel = 'OneDrive Files';
+    if (dataType === 'word_doc') dataLabel = 'Word Document Content';
+    if (dataType === 'excel_sheet') dataLabel = 'Excel Data';
+    // ✅ NEW LABELS
+    if (dataType === 'telegram_messages') dataLabel = 'Telegram Messages';
 
     const preview = JSON.stringify(data.slice(0, 3), null, 2);
     const completion = await openai.chat.completions.create({
@@ -374,10 +609,10 @@ async function generateSummary(
         },
       ],
     });
-    return completion.choices[0].message.content ?? `Found ${data.length} ${dataType}.`;
+    return completion.choices[0].message.content ?? `Found ${data.length} items.`;
   } catch (error) {
     console.error('AI summary error:', error);
-    return `Found ${data.length} ${dataType}.`;
+    return `Found ${data.length} items.`;
   }
 }
 

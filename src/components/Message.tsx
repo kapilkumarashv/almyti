@@ -8,20 +8,32 @@ import {
   DriveFile, 
   ShopifyOrder, 
   TeamsMessage, 
-  TeamsChannel 
+  TeamsChannel,
+  TelegramMessage,
+  // ✅ NEW IMPORTS
+  OutlookEmail,
+  OneDriveFile,
+  KeepNote,
+  ClassroomCourse,
+  ClassroomAssignment,
+  ClassroomStudent,
+  SheetRow
 } from '@/lib/types';
 
 interface MessageProps {
   message: MessageType;
 }
 
-/* ---------- TYPE GUARDS ---------- */
+/* =================================================================================
+   TYPE GUARDS (Check what kind of data we received)
+   ================================================================================= */
+
 function isGmailEmailArray(data: unknown): data is GmailEmail[] {
-  return Array.isArray(data) && data.length > 0 && 'snippet' in data[0];
+  return Array.isArray(data) && data.length > 0 && 'snippet' in data[0] && 'threadId' in data[0];
 }
 
 function isDriveFileArray(data: unknown): data is DriveFile[] {
-  return Array.isArray(data) && data.length > 0 && 'mimeType' in data[0];
+  return Array.isArray(data) && data.length > 0 && 'mimeType' in data[0] && 'webViewLink' in data[0];
 }
 
 function isShopifyOrderArray(data: unknown): data is ShopifyOrder[] {
@@ -36,11 +48,48 @@ function isTeamsChannelArray(data: unknown): data is TeamsChannel[] {
   return Array.isArray(data) && data.length > 0 && 'membershipType' in data[0] && 'displayName' in data[0];
 }
 
-/* ---------- COMPONENT ---------- */
+function isTelegramMessageArray(data: unknown): data is TelegramMessage[] {
+  return Array.isArray(data) && data.length > 0 && 'message_id' in data[0] && 'chat' in data[0];
+}
+
+/* --- ✅ NEW GUARDS --- */
+
+function isOutlookEmailArray(data: unknown): data is OutlookEmail[] {
+  return Array.isArray(data) && data.length > 0 && 'bodyPreview' in data[0] && 'receivedDateTime' in data[0];
+}
+
+function isOneDriveFileArray(data: unknown): data is OneDriveFile[] {
+  return Array.isArray(data) && data.length > 0 && 'webUrl' in data[0] && 'createdDateTime' in data[0];
+}
+
+function isKeepNoteArray(data: unknown): data is KeepNote[] {
+  return Array.isArray(data) && data.length > 0 && 'textContent' in data[0] && 'title' in data[0];
+}
+
+function isClassroomCourseArray(data: unknown): data is ClassroomCourse[] {
+  return Array.isArray(data) && data.length > 0 && 'enrollmentCode' in data[0];
+}
+
+function isClassroomAssignmentArray(data: unknown): data is ClassroomAssignment[] {
+  return Array.isArray(data) && data.length > 0 && 'courseId' in data[0] && 'dueDate' in data[0];
+}
+
+function isClassroomStudentArray(data: unknown): data is ClassroomStudent[] {
+  return Array.isArray(data) && data.length > 0 && 'profile' in data[0] && 'userId' in data[0];
+}
+
+function isSheetRowArray(data: unknown): data is SheetRow[] {
+  // Checks for Excel/Google Sheet rows
+  return Array.isArray(data) && data.length > 0 && 'values' in data[0];
+}
+
+/* =================================================================================
+   COMPONENT
+   ================================================================================= */
+
 const Message: React.FC<MessageProps> = ({ message }) => {
   const [time, setTime] = useState<string>('');
 
-  // ✅ Fix hydration: render time only on client
   useEffect(() => {
     setTime(new Date(message.timestamp).toLocaleTimeString());
   }, [message.timestamp]);
@@ -48,7 +97,9 @@ const Message: React.FC<MessageProps> = ({ message }) => {
   const renderData = () => {
     if (!message.data) return null;
 
-    // Gmail emails
+    /* ---------------- GOOGLE INTEGRATIONS ---------------- */
+
+    // Gmail
     if (isGmailEmailArray(message.data)) {
       return (
         <div className={styles.dataContainer}>
@@ -64,7 +115,7 @@ const Message: React.FC<MessageProps> = ({ message }) => {
       );
     }
 
-    // Drive files
+    // Drive
     if (isDriveFileArray(message.data)) {
       return (
         <div className={styles.dataContainer}>
@@ -72,17 +123,9 @@ const Message: React.FC<MessageProps> = ({ message }) => {
             <div key={file.id} className={styles.dataItem}>
               <div className={styles.dataItemTitle}>{file.name}</div>
               <div className={styles.dataItemMeta}>Type: {file.mimeType}</div>
-              <div className={styles.dataItemDate}>
-                Modified: {new Date(file.modifiedTime).toLocaleString()}
-              </div>
               {file.webViewLink && (
-                <a
-                  href={file.webViewLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.link}
-                >
-                  View File
+                <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                  Open in Drive
                 </a>
               )}
             </div>
@@ -91,29 +134,124 @@ const Message: React.FC<MessageProps> = ({ message }) => {
       );
     }
 
-    // Shopify orders
-    if (isShopifyOrderArray(message.data)) {
+    // Google Keep
+    if (isKeepNoteArray(message.data)) {
       return (
         <div className={styles.dataContainer}>
-          {message.data.map((order) => (
-            <div key={order.id} className={styles.dataItem}>
-              <div className={styles.dataItemTitle}>
-                Order #{order.order_number}
+          {message.data.map((note) => (
+            <div key={note.id} className={styles.dataItem} style={{ borderLeft: '4px solid #fbbc04' }}>
+              <div className={styles.dataItemTitle}>{note.title || '(No Title)'}</div>
+              <div className={styles.dataItemSnippet} style={{ whiteSpace: 'pre-wrap' }}>
+                {note.textContent}
               </div>
-              <div className={styles.dataItemMeta}>
-                Customer: {order.customer.first_name} {order.customer.last_name}
-              </div>
-              <div className={styles.dataItemMeta}>
-                Total: ${order.total_price}
-              </div>
-              <div className={styles.dataItemMeta}>
-                Status: {order.financial_status}
-              </div>
-              <div className={styles.dataItemDate}>
-                {new Date(order.created_at).toLocaleString()}
-              </div>
+              {note.url && (
+                <a href={note.url} target="_blank" rel="noopener noreferrer" className={styles.link}>Open Note</a>
+              )}
             </div>
           ))}
+        </div>
+      );
+    }
+
+    // Classroom Courses
+    if (isClassroomCourseArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          {message.data.map((course) => (
+            <div key={course.id} className={styles.dataItem}>
+              <div className={styles.dataItemTitle}>{course.name}</div>
+              <div className={styles.dataItemMeta}>Section: {course.section || 'N/A'}</div>
+              <div className={styles.dataItemMeta}>Code: <strong>{course.enrollmentCode}</strong></div>
+              {course.alternateLink && (
+                <a href={course.alternateLink} target="_blank" rel="noopener noreferrer" className={styles.link}>Go to Class</a>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Classroom Assignments
+    if (isClassroomAssignmentArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          {message.data.map((hw) => (
+            <div key={hw.id} className={styles.dataItem}>
+              <div className={styles.dataItemTitle}>{hw.title}</div>
+              <div className={styles.dataItemMeta}>
+                Due: {hw.dueDate ? `${hw.dueDate.day}/${hw.dueDate.month}/${hw.dueDate.year}` : 'No due date'}
+              </div>
+              {hw.alternateLink && (
+                <a href={hw.alternateLink} target="_blank" rel="noopener noreferrer" className={styles.link}>View Assignment</a>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* ---------------- MICROSOFT INTEGRATIONS ---------------- */
+
+    // Outlook Emails
+    if (isOutlookEmailArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          {message.data.map((email) => (
+            <div key={email.id} className={styles.dataItem}>
+              <div className={styles.dataItemTitle}>{email.subject}</div>
+              <div className={styles.dataItemMeta}>From: {email.sender.emailAddress.name}</div>
+              <div className={styles.dataItemSnippet}>{email.bodyPreview}</div>
+              <div className={styles.dataItemDate}>
+                {new Date(email.receivedDateTime).toLocaleString()}
+              </div>
+              {email.webLink && (
+                <a href={email.webLink} target="_blank" rel="noopener noreferrer" className={styles.link}>Open in Outlook</a>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // OneDrive Files
+    if (isOneDriveFileArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          {message.data.map((file) => (
+            <div key={file.id} className={styles.dataItem}>
+              <div className={styles.dataItemTitle}>{file.name}</div>
+              <div className={styles.dataItemMeta}>Size: {(file.size / 1024).toFixed(1)} KB</div>
+              <div className={styles.dataItemDate}>
+                Modified: {new Date(file.lastModifiedDateTime).toLocaleString()}
+              </div>
+              {file.webUrl && (
+                <a href={file.webUrl} target="_blank" rel="noopener noreferrer" className={styles.link}>Open in OneDrive</a>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Excel & Sheets Data (Rows)
+    if (isSheetRowArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          <div className={styles.dataItem} style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <tbody>
+                {message.data.map((row, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                    {row.values.map((cell, j) => (
+                      <td key={j} style={{ padding: '6px', borderRight: '1px solid #eee' }}>
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       );
     }
@@ -124,53 +262,49 @@ const Message: React.FC<MessageProps> = ({ message }) => {
         <div className={styles.dataContainer}>
           {message.data.map((msg) => (
             <div key={msg.id} className={styles.dataItem}>
-              <div className={styles.dataItemTitle}>
-                {msg.subject || 'Teams Message'}
-              </div>
-              <div className={styles.dataItemMeta}>
-                From: {msg.from.displayName}
-              </div>
+              <div className={styles.dataItemTitle}>{msg.subject || 'Teams Message'}</div>
+              <div className={styles.dataItemMeta}>From: {msg.from.displayName}</div>
               <div className={styles.dataItemSnippet}>{msg.body}</div>
-              <div className={styles.dataItemDate}>
-                {new Date(msg.createdDateTime).toLocaleString()}
-              </div>
-              {msg.webUrl && (
-                <a 
-                  href={msg.webUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className={styles.link}
-                >
-                  View in Teams
-                </a>
-              )}
+              <a href={msg.webUrl} target="_blank" rel="noopener noreferrer" className={styles.link}>View in Teams</a>
             </div>
           ))}
         </div>
       );
     }
 
-    // Teams Channels
-    if (isTeamsChannelArray(message.data)) {
+    /* ---------------- OTHER INTEGRATIONS ---------------- */
+
+    // Shopify
+    if (isShopifyOrderArray(message.data)) {
       return (
         <div className={styles.dataContainer}>
-          {message.data.map((channel) => (
-            <div key={channel.id} className={styles.dataItem}>
-              <div className={styles.dataItemTitle}>{channel.displayName}</div>
-              <div className={styles.dataItemMeta}>
-                Type: {channel.membershipType}
+          {message.data.map((order) => (
+            <div key={order.id} className={styles.dataItem}>
+              <div className={styles.dataItemTitle}>Order #{order.order_number}</div>
+              <div className={styles.dataItemMeta}>Total: ${order.total_price}</div>
+              <div className={styles.dataItemMeta}>Status: {order.financial_status}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Telegram
+    if (isTelegramMessageArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          {message.data.map((msg) => (
+            <div key={msg.message_id} className={styles.dataItem}>
+              <div className={styles.dataItemTitle}>
+                {msg.chat.title || msg.chat.username || 'Private Chat'}
               </div>
-              {channel.description && (
-                <div className={styles.dataItemSnippet}>{channel.description}</div>
-              )}
-              <a 
-                href={channel.webUrl} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className={styles.link}
-              >
-                Open Channel
-              </a>
+              <div className={styles.dataItemMeta}>
+                From: {msg.from?.first_name}
+              </div>
+              <div className={styles.dataItemSnippet}>{msg.text}</div>
+              <div className={styles.dataItemDate}>
+                {new Date(msg.date * 1000).toLocaleString()}
+              </div>
             </div>
           ))}
         </div>
@@ -186,8 +320,6 @@ const Message: React.FC<MessageProps> = ({ message }) => {
         <div className={styles.messageText}>{message.content}</div>
         {renderData()}
       </div>
-
-      {/* ✅ Safe hydration */}
       <div className={styles.messageTime}>{time}</div>
     </div>
   );

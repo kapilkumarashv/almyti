@@ -1,6 +1,7 @@
 /* ===================================================== */
 /* ===================== CHAT ========================= */
 /* ===================================================== */
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -16,12 +17,23 @@ export interface Message {
     | GoogleDoc
     | GoogleDocContent
     | TeamsMessage[]
-    | TeamsChannel[];
+    | TeamsChannel[]
+    | KeepNote[]
+    | ClassroomCourse[]
+    | ClassroomAssignment[]
+    | ClassroomStudent[]
+    | OutlookEmail[]
+    | OutlookEvent[]
+    | OneDriveFile[]
+    // ✅ TELEGRAM MESSAGES
+    | TelegramMessage[]
+    | any; 
 }
 
 /* ===================================================== */
 /* ===================== GMAIL ======================== */
 /* ===================================================== */
+
 export interface GmailEmail {
   id: string;
   threadId: string;
@@ -34,6 +46,7 @@ export interface GmailEmail {
 /* ===================================================== */
 /* ===================== GOOGLE MEET / CALENDAR ======= */
 /* ===================================================== */
+
 export interface GMeetEvent {
   eventId?: string;
   meetLink: string;
@@ -46,6 +59,7 @@ export interface GMeetEvent {
 /* ===================================================== */
 /* ===================== DRIVE ======================== */
 /* ===================================================== */
+
 export interface DriveFile {
   id: string;
   name: string;
@@ -56,16 +70,94 @@ export interface DriveFile {
 }
 
 /* ===================================================== */
+/* ===================== GOOGLE KEEP (NOTES) ========== */
+/* ===================================================== */
+
+export interface KeepNote {
+  id: string;
+  title: string;
+  textContent: string;
+  url?: string;
+}
+
+export interface CreateKeepNoteParams {
+  title?: string;
+  content?: string;
+}
+
+/* ===================================================== */
+/* ===================== GOOGLE CLASSROOM ============= */
+/* ===================================================== */
+
+export interface ClassroomCourse {
+  id: string;
+  name: string;
+  section?: string;
+  descriptionHeading?: string;
+  room?: string;
+  enrollmentCode?: string;
+  alternateLink?: string;
+  courseState?: string;
+}
+
+export interface ClassroomAssignment {
+  id: string;
+  courseId: string;
+  title: string;
+  description?: string;
+  dueDate?: { year: number; month: number; day: number };
+  dueTime?: { hours: number; minutes: number };
+  alternateLink?: string;
+  state?: string;
+}
+
+export interface ClassroomStudent {
+  courseId: string;
+  userId: string;
+  profile: {
+    id: string;
+    name: {
+      fullName: string;
+      givenName: string;
+      familyName: string;
+    };
+    emailAddress: string;
+  };
+}
+
+export interface CreateCourseParams {
+  name: string;
+  section?: string;
+  description?: string;
+  room?: string;
+}
+
+export interface FetchCoursesParams {
+  limit?: number;
+  status?: string; 
+}
+
+export interface FetchAssignmentsParams {
+  courseId?: string;
+  courseName?: string; 
+  limit?: number;
+}
+
+export interface FetchStudentsParams {
+  courseId?: string;
+  courseName?: string; 
+  studentName?: string; 
+}
+
+/* ===================================================== */
 /* ===================== GOOGLE SHEETS ================ */
 /* ===================================================== */
 
-/** Returned when a new spreadsheet is created */
 export interface CreatedSheet {
   spreadsheetId: string;
   spreadsheetUrl: string;
 }
 
-/** One row read from a sheet */
 export interface SheetRow {
   rowNumber?: number;
   values: string[];
@@ -78,11 +170,13 @@ export interface CreateSheetParams {
 
 export interface ReadSheetParams {
   spreadsheetId?: string;
+  title?: string;
   range?: string;
 }
 
 export interface UpdateSheetParams {
   spreadsheetId?: string;
+  title?: string;
   range?: string;
   values?: string[][];
 }
@@ -91,14 +185,12 @@ export interface UpdateSheetParams {
 /* ===================== GOOGLE DOCS ================== */
 /* ===================================================== */
 
-/** Basic document metadata */
 export interface GoogleDoc {
   documentId: string;
   title: string;
   url?: string;
 }
 
-/** Full document content (plain text) */
 export interface GoogleDocContent {
   documentId: string;
   title?: string;
@@ -112,25 +204,29 @@ export interface CreateDocParams {
 
 export interface ReadDocParams {
   documentId?: string;
+  title?: string;
 }
 
 export interface AppendDocParams {
   documentId?: string;
+  title?: string;
   text?: string;
 }
 
 export interface ReplaceDocParams {
   documentId?: string;
+  title?: string;
   findText?: string;
   replaceText?: string;
 }
 
 export interface ClearDocParams {
   documentId?: string;
+  title?: string;
 }
 
 /* ===================================================== */
-/* ===================== MICROSOFT / TEAMS ============ */
+/* ===================== MICROSOFT ==================== */
 /* ===================================================== */
 
 export interface MicrosoftTokens {
@@ -140,6 +236,78 @@ export interface MicrosoftTokens {
   scope?: string;
 }
 
+// OUTLOOK MAIL
+export interface OutlookEmail {
+  id: string;
+  subject: string;
+  bodyPreview: string;
+  sender: {
+    emailAddress: {
+      name: string;
+      address: string;
+    };
+  };
+  toRecipients: {
+    emailAddress: {
+      name: string;
+      address: string;
+    };
+  }[];
+  receivedDateTime: string;
+  webLink: string;
+}
+
+// OUTLOOK CALENDAR
+export interface OutlookEvent {
+  id: string;
+  subject: string;
+  body: {
+    contentType: string;
+    content: string;
+  };
+  start: {
+    dateTime: string;
+    timeZone: string;
+  };
+  end: {
+    dateTime: string;
+    timeZone: string;
+  };
+  location: {
+    displayName: string;
+  };
+  webLink: string;
+}
+
+// ONEDRIVE FILES
+export interface OneDriveFile {
+  id: string;
+  name: string;
+  webUrl: string;
+  size: number;
+  createdDateTime: string;
+  lastModifiedDateTime: string;
+  file?: {
+    mimeType: string;
+  };
+  folder?: {
+    childCount: number;
+  };
+}
+
+// EXCEL
+export interface ExcelWorksheet {
+  id: string;
+  name: string;
+  position: number;
+  visibility: string;
+}
+
+export interface ExcelRow {
+  values: (string | number | boolean | null)[];
+}
+
+// TEAMS
 export interface TeamsMessage {
   id: string;
   subject: string | null;
@@ -169,6 +337,7 @@ export interface FetchTeamsParams {
 /* ===================================================== */
 /* ===================== SHOPIFY ===================== */
 /* ===================================================== */
+
 export interface ShopifyOrder {
   id: number;
   order_number: number;
@@ -200,17 +369,69 @@ export interface FetchOrderParams {
 }
 
 /* ===================================================== */
+/* ===================== TELEGRAM (NEW) =============== */
+/* ===================================================== */
+
+export interface TelegramUser {
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+  username?: string;
+}
+
+export interface TelegramChat {
+  id: number;
+  type: 'private' | 'group' | 'supergroup' | 'channel';
+  title?: string;
+  username?: string;
+}
+
+export interface TelegramMessage {
+  message_id: number;
+  from?: TelegramUser;
+  chat: TelegramChat;
+  date: number;
+  text?: string;
+}
+
+export interface TelegramUpdate {
+  update_id: number;
+  message?: TelegramMessage;
+}
+
+export interface SendTelegramParams {
+  chatId?: string; // Can be ID or @username
+  text?: string;
+  replyToMessageId?: number;
+}
+
+export interface ManageTelegramGroupParams {
+  chatId?: string;
+  action?: 'kick' | 'pin' | 'unpin' | 'promote' | 'title';
+  userId?: number; 
+  messageId?: number;
+  value?: string;
+}
+
+export interface TelegramConfig {
+  botToken: string;
+}
+
+/* ===================================================== */
 /* ===================== CONNECTION STATUS =========== */
 /* ===================================================== */
+
 export interface ServiceConnection {
   google: boolean;
   shopify: boolean;
   microsoft: boolean;
+  telegram: boolean; // ✅ Added
 }
 
 /* ===================================================== */
 /* ===================== AUTH ========================= */
 /* ===================================================== */
+
 export interface GoogleTokens {
   access_token: string;
   refresh_token?: string;
@@ -220,6 +441,7 @@ export interface GoogleTokens {
 /* ===================================================== */
 /* ===================== AI PARAMS ==================== */
 /* ===================================================== */
+
 export interface FetchEmailParams {
   limit?: number;
   search?: string;
@@ -241,6 +463,7 @@ export interface SendEmailParams {
 /* ===================================================== */
 /* ===================== BASE INTENT ================== */
 /* ===================================================== */
+
 interface BaseIntent {
   usesContext?: boolean;
 }
@@ -248,6 +471,7 @@ interface BaseIntent {
 /* ===================================================== */
 /* ===================== AI INTENT =================== */
 /* ===================================================== */
+
 export type AIIntent =
   | (BaseIntent & {
       action: 'fetch_emails';
@@ -320,8 +544,80 @@ export type AIIntent =
       naturalResponse: string;
     })
   | (BaseIntent & {
+      action: 'fetch_notes';
+      parameters: { limit?: number };
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'create_note';
+      parameters: CreateKeepNoteParams;
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'create_course';
+      parameters: CreateCourseParams;
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'fetch_courses';
+      parameters: FetchCoursesParams;
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'fetch_assignments';
+      parameters: FetchAssignmentsParams;
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'fetch_students';
+      parameters: FetchStudentsParams;
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
       action: 'fetch_teams_messages' | 'fetch_teams_channels';
       parameters: FetchTeamsParams;
+      naturalResponse: string;
+    })
+  // MICROSOFT INTENTS
+  | (BaseIntent & {
+      action: 'fetch_outlook_emails';
+      parameters: { limit?: number; search?: string };
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'send_outlook_email';
+      parameters: { to?: string; subject?: string; body?: string };
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'create_outlook_event';
+      parameters: { subject?: string; date?: string; time?: string };
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'fetch_onedrive_files';
+      parameters: { limit?: number };
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'create_word_doc' | 'read_word_doc' | 'create_excel_sheet' | 'read_excel_sheet' | 'update_excel_sheet';
+      parameters: { title?: string; documentId?: string; spreadsheetId?: string; values?: any[][] };
+      naturalResponse: string;
+    })
+  // ✅ TELEGRAM INTENTS
+  | (BaseIntent & {
+      action: 'fetch_telegram_updates';
+      parameters: { limit?: number };
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'send_telegram_message';
+      parameters: SendTelegramParams;
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'manage_telegram_group';
+      parameters: ManageTelegramGroupParams;
       naturalResponse: string;
     })
   | (BaseIntent & {
@@ -333,6 +629,7 @@ export type AIIntent =
 /* ===================================================== */
 /* ===================== AGENT RESPONSE =============== */
 /* ===================================================== */
+
 export interface AgentResponse {
   action:
     | 'fetch_emails'
@@ -351,11 +648,32 @@ export interface AgentResponse {
     | 'append_doc'
     | 'replace_doc'
     | 'clear_doc'
+    | 'fetch_notes'
+    | 'create_note'
+    | 'create_course'
+    | 'fetch_courses'
+    | 'fetch_assignments'
+    | 'fetch_students'
     | 'fetch_teams_messages'
     | 'fetch_teams_channels'
+    | 'fetch_outlook_emails'
+    | 'send_outlook_email'
+    | 'create_outlook_event'
+    | 'fetch_onedrive_files'
+    | 'create_word_doc'
+    | 'read_word_doc'
+    | 'create_excel_sheet'
+    | 'read_excel_sheet'
+    | 'update_excel_sheet'
+    // ✅ TELEGRAM ACTIONS
+    | 'fetch_telegram_updates'
+    | 'send_telegram_message'
+    | 'manage_telegram_group'
     | 'help'
     | 'none';
+
   message: string;
+
   data?:
     | GmailEmail[]
     | DriveFile[]
@@ -366,5 +684,15 @@ export interface AgentResponse {
     | GoogleDoc
     | GoogleDocContent
     | TeamsMessage[]
-    | TeamsChannel[];
+    | TeamsChannel[]
+    | KeepNote[]
+    | ClassroomCourse[]
+    | ClassroomAssignment[]
+    | ClassroomStudent[]
+    | OutlookEmail[]
+    | OutlookEvent
+    | OneDriveFile[]
+    // ✅ TELEGRAM DATA
+    | TelegramMessage[]
+    | any;
 }

@@ -16,8 +16,17 @@ const SCOPES = [
 
   // Calendar (REQUIRED for Google Meet)
   'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/documents'
+  'https://www.googleapis.com/auth/documents',
 
+  // Google Keep
+
+
+  // ✅ Google Classroom (Added)
+  'https://www.googleapis.com/auth/classroom.courses',            // Create/List courses
+  'https://www.googleapis.com/auth/classroom.rosters',            // List students/teachers
+  'https://www.googleapis.com/auth/classroom.coursework.students', // Manage assignments
+  'https://www.googleapis.com/auth/classroom.profile.emails',     // View student emails/names
+  'https://www.googleapis.com/auth/classroom.profile.photos'      // View student profiles
 ];
 
 /* -------------------- TOKEN FILE PATH -------------------- */
