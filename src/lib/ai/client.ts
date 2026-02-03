@@ -60,6 +60,14 @@ TELEGRAM BOT RULES:
   - Extract "userId" (if kicking/promoting) or "messageId" (if pinning).
   - If action is "title", extract the new title text into "value".
 
+YOUTUBE RULES:
+- search_youtube: User asks to find, search, or look for videos. Extract "query".
+- get_channel_stats: User asks for channel info, subscribers, or view count. Extract "channelName" or "channelId".
+
+GOOGLE FORMS RULES:
+- create_form: User asks to create a new form. Extract "title".
+- fetch_form_responses: User asks for responses. Extract "title" (if user gives a name) OR "formId" (if context implies it).
+
 EMAIL RULES (GMAIL):
 - fetch_emails: only if user explicitly asks to read emails (default to Gmail if "Outlook" not specified).
 - send_email: only if user explicitly asks to send emails (default to Gmail).
@@ -133,6 +141,10 @@ Available actions:
 - fetch_telegram_updates
 - send_telegram_message
 - manage_telegram_group
+- search_youtube
+- get_channel_stats
+- create_form
+- fetch_form_responses
 - create_meet
 - delete_meet
 - update_meet
@@ -163,6 +175,8 @@ RESPONSE FORMAT (JSON ONLY):
            | "fetch_onedrive_files" | "create_word_doc" | "read_word_doc"
            | "create_excel_sheet" | "read_excel_sheet" | "update_excel_sheet"
            | "fetch_telegram_updates" | "send_telegram_message" | "manage_telegram_group"
+           | "search_youtube" | "get_channel_stats"
+           | "create_form" | "fetch_form_responses"
            | "create_meet" | "delete_meet" | "update_meet"
            | "create_sheet" | "read_sheet" | "update_sheet"
            | "create_doc" | "read_doc" | "append_doc" | "replace_doc" | "clear_doc"
@@ -186,9 +200,17 @@ RESPONSE FORMAT (JSON ONLY):
     "userId": "Telegram user ID",
     "messageId": "Telegram message ID",
     "value": "The new title for the group",
+    
+    // YouTube
+    "query": "video search query",
+    "channelName": "name of youtube channel",
+    "channelId": "id of youtube channel",
 
-    // Docs, Sheets & Notes
-    "title": "filename, spreadsheet title, or note title",
+    // Forms
+    "formId": "id of the google form (ONLY if explicitly provided)",
+
+    // Docs, Sheets & Notes & Forms
+    "title": "filename, spreadsheet title, note title or form title",
     "sheetName": "optional sheet name",
     "spreadsheetId": "existing spreadsheet id (optional if title is given)",
     "documentId": "google document id (optional if title is given)",
@@ -299,6 +321,40 @@ function fallbackParsing(query: string): AIIntent {
       parameters: { limit: 5 },
       naturalResponse: 'Checking for new Telegram messages...'
     };
+  }
+
+  /* -------------------- YOUTUBE FALLBACKS -------------------- */
+  if (q.includes('youtube')) {
+    if (q.includes('channel') || q.includes('subscribers') || q.includes('stats')) {
+      return {
+        action: 'get_channel_stats',
+        parameters: {},
+        naturalResponse: 'I can get channel stats. Which channel?'
+      };
+    }
+    return {
+      action: 'search_youtube',
+      parameters: { limit: 5 },
+      naturalResponse: 'Searching YouTube...'
+    };
+  }
+
+  /* -------------------- GOOGLE FORMS FALLBACKS -------------------- */
+  if (q.includes('form') && (q.includes('google') || q.includes('create') || q.includes('response'))) {
+    if (q.includes('create') || q.includes('new')) {
+      return {
+        action: 'create_form',
+        parameters: { title: 'Untitled Form' },
+        naturalResponse: 'Creating a new Google Form.'
+      };
+    }
+    if (q.includes('response') || q.includes('answer')) {
+      return {
+        action: 'fetch_form_responses',
+        parameters: {},
+        naturalResponse: 'Fetching form responses.'
+      };
+    }
   }
 
   /* -------------------- MICROSOFT FALLBACKS -------------------- */
@@ -551,7 +607,7 @@ function fallbackParsing(query: string): AIIntent {
     action: 'help',
     usesContext: false,
     parameters: {},
-    naturalResponse: 'I can help with Gmail, Drive, Classroom, Shopify, Google Meet, Sheets, Docs, Keep, Teams, and Telegram.',
+    naturalResponse: 'I can help with Gmail, Drive, Classroom, Shopify, Google Meet, Sheets, Docs, Keep, Teams, Telegram, YouTube and Forms.',
   };
 }
 
@@ -574,8 +630,12 @@ async function generateSummary(
     | 'onedrive_files'
     | 'word_doc'
     | 'excel_sheet'
-    // ✅ NEW TYPES
     | 'telegram_messages'
+    // ✅ NEW TYPES
+    | 'youtube_videos'
+    | 'youtube_stats'
+    | 'form_responses'
+    | 'created_form'
 ): Promise<string> {
   try {
     let dataLabel: string = dataType;
@@ -590,8 +650,13 @@ async function generateSummary(
     if (dataType === 'onedrive_files') dataLabel = 'OneDrive Files';
     if (dataType === 'word_doc') dataLabel = 'Word Document Content';
     if (dataType === 'excel_sheet') dataLabel = 'Excel Data';
-    // ✅ NEW LABELS
     if (dataType === 'telegram_messages') dataLabel = 'Telegram Messages';
+    
+    // ✅ NEW LABELS
+    if (dataType === 'youtube_videos') dataLabel = 'YouTube Search Results';
+    if (dataType === 'youtube_stats') dataLabel = 'YouTube Channel Statistics';
+    if (dataType === 'form_responses') dataLabel = 'Google Form Responses';
+    if (dataType === 'created_form') dataLabel = 'Created Google Form';
 
     const preview = JSON.stringify(data.slice(0, 3), null, 2);
     const completion = await openai.chat.completions.create({

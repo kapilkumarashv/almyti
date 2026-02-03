@@ -8,9 +8,7 @@ interface ConnectorCardProps {
   onConnect: () => void;
   icon?: string;
   requiresInput?: boolean;
-  // ✅ ADDED: Type to distinguish between services
   serviceType?: 'shopify' | 'telegram' | 'default';
-  // ✅ UPDATED: Callback now accepts generic data
   onInputSubmit?: (data: any) => Promise<void>;
 }
 
@@ -62,9 +60,31 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
     <div className={`${styles.card} ${connected ? styles.connected : ''}`}>
       <div className={styles.header}>
         {icon && <div className={styles.icon}>{icon}</div>}
-        <div className={styles.info}>
-          <h3 className={styles.title}>{title}</h3>
-          <p className={styles.description}>{description}</p>
+        <div className={styles.info} style={{ minWidth: 0 }}> {/* minWidth: 0 allows flex children to shrink/wrap */}
+          <h3 
+            className={styles.title} 
+            style={{ 
+              whiteSpace: 'normal', 
+              wordWrap: 'break-word', 
+              overflowWrap: 'anywhere',
+              lineHeight: '1.2' 
+            }}
+          >
+            {title}
+          </h3>
+          <p 
+            className={styles.description} 
+            style={{ 
+              whiteSpace: 'normal', 
+              wordWrap: 'break-word', 
+              overflowWrap: 'anywhere',
+              fontSize: '0.85rem',
+              lineHeight: '1.4',
+              marginTop: '4px'
+            }}
+          >
+            {description}
+          </p>
         </div>
       </div>
 
@@ -79,7 +99,7 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
       ) : (
         <form onSubmit={handleSubmit} className={styles.form}>
           
-          {/* ✅ SHOPIFY INPUTS */}
+          {/* SHOPIFY INPUTS */}
           {serviceType === 'shopify' && (
             <>
               <input
@@ -101,11 +121,11 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
             </>
           )}
 
-          {/* ✅ TELEGRAM INPUTS */}
+          {/* TELEGRAM INPUTS */}
           {serviceType === 'telegram' && (
             <input
               type="password"
-              placeholder="Telegram Bot Token (from @BotFather)"
+              placeholder="Telegram Bot Token"
               value={botToken}
               onChange={(e) => setBotToken(e.target.value)}
               className={styles.input}

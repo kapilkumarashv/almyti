@@ -18,15 +18,19 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/documents',
 
-  // Google Keep
-
-
-  // ✅ Google Classroom (Added)
+  // Google Classroom
   'https://www.googleapis.com/auth/classroom.courses',            // Create/List courses
   'https://www.googleapis.com/auth/classroom.rosters',            // List students/teachers
   'https://www.googleapis.com/auth/classroom.coursework.students', // Manage assignments
   'https://www.googleapis.com/auth/classroom.profile.emails',     // View student emails/names
-  'https://www.googleapis.com/auth/classroom.profile.photos'      // View student profiles
+  'https://www.googleapis.com/auth/classroom.profile.photos',      // View student profiles
+
+  // ✅ YouTube (Added)
+  'https://www.googleapis.com/auth/youtube.readonly',             // Search videos & view channel stats
+
+  // ✅ Google Forms (Added)
+  'https://www.googleapis.com/auth/forms.body',                   // Create & edit forms
+  'https://www.googleapis.com/auth/forms.responses.readonly'      // Read form responses
 ];
 
 /* -------------------- TOKEN FILE PATH -------------------- */

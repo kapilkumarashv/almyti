@@ -25,11 +25,66 @@ export interface Message {
     | OutlookEmail[]
     | OutlookEvent[]
     | OneDriveFile[]
-    // ✅ TELEGRAM MESSAGES
     | TelegramMessage[]
+    // ✅ NEW TYPES
+    | YouTubeVideo[]
+    | YouTubeChannel[]
+    | GoogleForm[]
+    | FormResponse[]
     | any; 
 }
+/* ===================================================== */
+/* ===================== YOUTUBE ====================== */
+/* ===================================================== */
 
+export interface YouTubeVideo {
+  id: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  channelTitle: string;
+  publishTime: string;
+  videoUrl: string;
+}
+
+export interface YouTubeChannel {
+  id: string;
+  title: string;
+  description: string;
+  customUrl?: string;
+  subscriberCount: string;
+  viewCount: string;
+  videoCount: string;
+  thumbnailUrl: string;
+}
+
+/* ===================================================== */
+/* ===================== GOOGLE FORMS ================= */
+/* ===================================================== */
+
+/* src/lib/types/index.ts */
+
+// Replace the GoogleForm interface with this:
+export interface GoogleForm {
+  formId: string;
+  title: string;
+  documentTitle: string;
+  responderUri: string;
+  revisionId: string;
+  formUri?: string; // ✅ Added this property
+}
+export interface FormQuestionAnswer {
+  questionId: string;
+  textAnswers: string[];
+}
+
+export interface FormResponse {
+  responseId: string;
+  createTime: string;
+  lastSubmittedTime: string;
+  answers: FormQuestionAnswer[];
+  respondentEmail?: string;
+}
 /* ===================================================== */
 /* ===================== GMAIL ======================== */
 /* ===================================================== */
@@ -604,7 +659,7 @@ export type AIIntent =
       parameters: { title?: string; documentId?: string; spreadsheetId?: string; values?: any[][] };
       naturalResponse: string;
     })
-  // ✅ TELEGRAM INTENTS
+  // TELEGRAM INTENTS
   | (BaseIntent & {
       action: 'fetch_telegram_updates';
       parameters: { limit?: number };
@@ -620,12 +675,40 @@ export type AIIntent =
       parameters: ManageTelegramGroupParams;
       naturalResponse: string;
     })
+  // ✅ YOUTUBE INTENTS
+  | (BaseIntent & {
+      action: 'search_youtube';
+      parameters: { query?: string; limit?: number };
+      naturalResponse: string;
+    })
+  | (BaseIntent & {
+      action: 'get_channel_stats';
+      parameters: { channelName?: string; channelId?: string };
+      naturalResponse: string;
+    })
+  // ✅ GOOGLE FORMS INTENTS
+  | (BaseIntent & {
+      action: 'create_form';
+      parameters: { title?: string };
+      naturalResponse: string;
+    })
+// ... inside export type AIIntent = ...
+
+  | (BaseIntent & {
+      action: 'fetch_form_responses';
+      parameters: { 
+        formId?: string; 
+        title?: string; // ✅ ADD THIS LINE
+      };
+      naturalResponse: string;
+    })
+
+// ... rest of the file
   | (BaseIntent & {
       action: 'help' | 'none';
       parameters: {};
       naturalResponse: string;
     });
-
 /* ===================================================== */
 /* ===================== AGENT RESPONSE =============== */
 /* ===================================================== */
@@ -665,10 +748,14 @@ export interface AgentResponse {
     | 'create_excel_sheet'
     | 'read_excel_sheet'
     | 'update_excel_sheet'
-    // ✅ TELEGRAM ACTIONS
     | 'fetch_telegram_updates'
     | 'send_telegram_message'
     | 'manage_telegram_group'
+    // ✅ NEW ACTIONS
+    | 'search_youtube'
+    | 'get_channel_stats'
+    | 'create_form'
+    | 'fetch_form_responses'
     | 'help'
     | 'none';
 
@@ -692,7 +779,11 @@ export interface AgentResponse {
     | OutlookEmail[]
     | OutlookEvent
     | OneDriveFile[]
-    // ✅ TELEGRAM DATA
     | TelegramMessage[]
+    // ✅ NEW DATA TYPES
+    | YouTubeVideo[]
+    | YouTubeChannel[]
+    | GoogleForm[]
+    | FormResponse[]
     | any;
 }

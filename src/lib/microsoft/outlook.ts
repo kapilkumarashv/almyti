@@ -90,18 +90,25 @@ export async function getOutlookEvents(accessToken: string, limit: number = 5): 
   }
 }
 
-export async function createOutlookEvent(accessToken: string, subject: string, startISO: string, endISO: string): Promise<OutlookEvent> {
+// ✅ UPDATED: Now accepts 'timeZone' to ensure events appear at the correct local time
+export async function createOutlookEvent(
+  accessToken: string, 
+  subject: string, 
+  startDateTime: string, // Format: "YYYY-MM-DDTHH:MM:ss" (No 'Z')
+  endDateTime: string,   // Format: "YYYY-MM-DDTHH:MM:ss" (No 'Z')
+  timeZone: string = 'India Standard Time' // ✅ Default to IST
+): Promise<OutlookEvent> {
   const client = new GraphClient(accessToken);
 
   const eventData = {
     subject: subject,
     start: {
-      dateTime: startISO,
-      timeZone: 'UTC' // Simplified for agent
+      dateTime: startDateTime,
+      timeZone: timeZone // Use local time
     },
     end: {
-      dateTime: endISO,
-      timeZone: 'UTC'
+      dateTime: endDateTime,
+      timeZone: timeZone // Use local time
     }
   };
 

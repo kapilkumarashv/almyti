@@ -147,7 +147,7 @@ export default function Home() {
             
             <ConnectorCard
               title="Google"
-              description="Access Gmail, Drive, Docs & Sheets"
+              description="Access Classroom, Forms, Meet, Calendar, Keep, YouTube, Gmail, Drive, Docs & Sheets"
               icon="📧"
               connected={!!googleTokens}
               onConnect={handleGoogleConnect}
@@ -155,7 +155,7 @@ export default function Home() {
 
             <ConnectorCard
               title="Microsoft 365"
-              description="Access Teams, Outlook, OneDrive"
+              description="Access Teams, Outlook, OneDrive, Word & Excel"
               icon="🟦"
               connected={!!microsoftTokens}
               onConnect={handleMicrosoftConnect}
@@ -172,7 +172,6 @@ export default function Home() {
               onInputSubmit={handleShopifyConnect}
             />
 
-            {/* ✅ UPDATED: Pass boolean based on state, not storage */}
             <ConnectorCard
               title="Telegram Bot"
               description="Manage groups & read messages"

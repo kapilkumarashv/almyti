@@ -23,6 +23,7 @@ import {
   setChatTitle 
 } from '../telegram/client';
 /* --- EXISTING GOOGLE IMPORTS --- */
+import { getRecentTeamsMessages, getTeamsChannels } from '../microsoft/teams';
 import {
   createGoogleDoc,
   readGoogleDoc,
@@ -30,7 +31,9 @@ import {
   replaceTextInGoogleDoc,
   clearGoogleDoc,
 } from '../google/docsClient';
-
+/* --- ✅ NEW GOOGLE IMPORTS --- */
+import { searchVideos, getChannelStats } from '../google/youtube';
+import { createForm, getFormResponses } from '../google/forms';
 import { createSpreadsheet, readSheet, updateSheet } from '../google/sheets';
 import { listKeepNotes, createKeepNote } from '../google/keep';
 import { 
@@ -124,7 +127,78 @@ function saveTokens(tokens: GoogleTokens) {
   const file = path.join(process.cwd(), 'google_tokens.json');
   fs.writeFileSync(file, JSON.stringify(tokens, null, 2));
 }
+/* ===================================================== */
+/* ===================== YOUTUBE (NEW) ================ */
+/* ===================================================== */
 
+export interface YouTubeVideo {
+  id: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  channelTitle: string;
+  publishTime: string;
+  videoUrl: string;
+}
+
+export interface YouTubeChannel {
+  id: string;
+  title: string;
+  description: string;
+  customUrl?: string;
+  thumbnailUrl: string;
+  statistics: {
+    viewCount: string;
+    subscriberCount: string;
+    videoCount: string;
+  };
+}
+
+export interface FetchYouTubeParams {
+  query?: string;
+  channelId?: string; // For stats
+  limit?: number;
+}
+
+/* ===================================================== */
+/* ===================== GOOGLE FORMS (NEW) =========== */
+/* ===================================================== */
+
+export interface GoogleForm {
+  formId: string;
+  info: {
+    title: string;
+    documentTitle?: string;
+  };
+  responderUri: string; // Link to fill the form
+  formUri?: string;     // Link to edit the form
+}
+
+export interface FormQuestionAnswer {
+  questionId: string;
+  textAnswers?: {
+    answers: { value: string }[];
+  };
+}
+
+export interface FormResponse {
+  responseId: string;
+  createTime: string;
+  lastSubmittedTime: string;
+  answers: { [key: string]: FormQuestionAnswer }; // Map of questionId -> Answer
+  respondentEmail?: string;
+}
+
+export interface CreateFormParams {
+  title: string;
+  documentTitle?: string; // Optional filename
+}
+
+export interface FetchFormParams {
+  formId?: string;
+  title?: string; // To resolve ID by name
+  limit?: number;
+}
 /* ===================================================== */
 /* ===================== AUTH CLIENT ==================== */
 /* ===================================================== */
@@ -199,9 +273,8 @@ export async function processQuery(
       if (file) return { id: file.id, name: file.name };
       return { id: null, name: title };
     }
-
-    /* ============================================================================
-       ✅ MICROSOFT OUTLOOK (MAIL & CALENDAR) - NEW LOGIC
+/* ============================================================================
+       ✅ MICROSOFT OUTLOOK (MAIL & CALENDAR)
        ============================================================================ */
     
     // 1. Fetch Outlook Emails
@@ -224,28 +297,154 @@ export async function processQuery(
       return { action: 'send_outlook_email', message: '✅ Outlook email sent successfully.' };
     }
 
-    // 3. Create Outlook Event
+    // 3. Create Outlook Event (Microsoft Meet)
+// 3. Create Outlook Event (Microsoft Meet)
     if (intent.action === 'create_outlook_event') {
       if (!msToken) return { action: 'create_outlook_event', message: '❌ Please sign in with Microsoft first.' };
       
       const { date, time, subject } = intent.parameters ?? {};
       if (!time) return { action: 'create_outlook_event', message: '🕒 Please provide a time for the event.' };
 
+      // 1. Get Date (YYYY-MM-DD)
       const meetingDate = date ?? new Date().toISOString().split('T')[0];
-      const safeTime = normalizeTimeTo24h(time);
-      const startISO = new Date(`${meetingDate}T${safeTime}:00`).toISOString();
-      const endISO = new Date(new Date(startISO).getTime() + 30 * 60 * 1000).toISOString();
+      
+      // 2. Get Time (HH:MM)
+      const safeTime = normalizeTimeTo24h(time); // Returns "10:00"
+      
+      // 3. Construct Start String (YYYY-MM-DDTHH:MM:ss) - NO UTC conversion
+      const startDateTime = `${meetingDate}T${safeTime}:00`;
 
-      const event = await createOutlookEvent(msToken, subject || 'Meeting', startISO, endISO);
+      // 4. Calculate End Time (Add 30 mins manually to string)
+      // This avoids using Date objects that might shift due to server timezone
+      const [hourStr, minStr] = safeTime.split(':');
+      let endHour = parseInt(hourStr);
+      let endMin = parseInt(minStr) + 30;
+      
+      if (endMin >= 60) {
+        endMin -= 60;
+        endHour += 1;
+      }
+      const endSafeTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
+      const endDateTime = `${meetingDate}T${endSafeTime}:00`;
+
+      // 5. Define Timezone (Hardcoded to IST based on your location)
+      const timeZone = 'India Standard Time';
+
+      const event = await createOutlookEvent(msToken, subject || 'Meeting', startDateTime, endDateTime, timeZone);
+      
       return { 
         action: 'create_outlook_event', 
-        message: `✅ Outlook Calendar event created: "${event.subject}" at ${displayTimeFromISO(event.start.dateTime)}`,
+        message: `✅ Outlook Calendar event created: "${event.subject}" at ${safeTime} (${timeZone})`,
         data: event 
       };
     }
 
     /* ============================================================================
-       ✅ MICROSOFT FILES (ONEDRIVE, WORD, EXCEL) - NEW LOGIC
+       ✅ YOUTUBE INTEGRATION
+       ============================================================================ */
+    
+    // 1. Search Videos
+    if (intent.action === 'search_youtube') {
+      const { query: searchQuery, limit } = intent.parameters ?? {};
+      if (!searchQuery) return { action: 'search_youtube', message: 'What should I search for on YouTube?' };
+
+      try {
+        const videos = await searchVideos(auth, searchQuery, limit ?? 5);
+        return { 
+          action: 'search_youtube', 
+          message: `✅ Found ${videos.length} videos for "${searchQuery}".`, 
+          data: videos 
+        };
+      } catch (e) {
+        return { action: 'search_youtube', message: '❌ Failed to search YouTube.' };
+      }
+    }
+
+    // 2. Get Channel Stats
+    if (intent.action === 'get_channel_stats') {
+      const { channelName, channelId } = intent.parameters ?? {};
+      if (!channelName && !channelId) return { action: 'get_channel_stats', message: 'Please provide a channel name or ID.' };
+
+      try {
+        const channels = await getChannelStats(auth, channelName, channelId);
+        if (!channels.length) return { action: 'get_channel_stats', message: '❌ Channel not found.' };
+
+        const ch = channels[0];
+        return { 
+          action: 'get_channel_stats', 
+          message: `✅ **${ch.title}** has ${ch.subscriberCount} subscribers and ${ch.videoCount} videos.`, 
+          data: channels 
+        };
+      } catch (e) {
+        return { action: 'get_channel_stats', message: '❌ Failed to get channel stats.' };
+      }
+    }
+
+    /* ============================================================================
+       ✅ GOOGLE FORMS INTEGRATION
+       ============================================================================ */
+
+    // 1. Create Form
+    if (intent.action === 'create_form') {
+      const { title } = intent.parameters ?? {};
+      const formTitle = title || 'Untitled Form';
+
+      try {
+        const form = await createForm(auth, formTitle);
+        return { 
+          action: 'create_form', 
+          message: `✅ Created form: "${form.title}"\n🔗 Edit: ${form.responderUri}`, 
+          data: [form] 
+        };
+      } catch (e) {
+        return { action: 'create_form', message: '❌ Failed to create Google Form.' };
+      }
+    }
+
+    // 2. Fetch Form Responses
+    if (intent.action === 'fetch_form_responses') {
+      const { formId, title } = intent.parameters ?? {};
+      
+      // ✅ HEURISTIC FIX: If AI passed a short name as formId, treat it as a title
+      let targetTitle = title;
+      let targetId = formId;
+
+      if (!targetTitle && targetId && (targetId.length < 25 || targetId.includes(' '))) {
+        targetTitle = targetId;
+        targetId = undefined;
+      }
+
+      const fileParams = await resolveFileId(
+        targetTitle, 
+        targetId, 
+        'application/vnd.google-apps.form'
+      );
+
+      if (!fileParams.id) {
+        return { 
+          action: 'fetch_form_responses', 
+          message: `❌ Could not find a form named "${fileParams.name || targetId}". Try providing the exact name.` 
+        };
+      }
+
+      try {
+        const responses = await getFormResponses(auth, fileParams.id);
+        return { 
+          action: 'fetch_form_responses', 
+          message: `✅ Found ${responses.length} responses for "${fileParams.name}".`, 
+          data: responses 
+        };
+      } catch (e) {
+        console.error('Form response error:', e);
+        return { 
+          action: 'fetch_form_responses', 
+          message: '❌ Failed to fetch form responses. The form might be empty or restricted.' 
+        };
+      }
+    }
+
+    /* ============================================================================
+       ✅ MICROSOFT FILES (ONEDRIVE, WORD, EXCEL)
        ============================================================================ */
 
     // 1. Fetch OneDrive Files
@@ -313,7 +512,7 @@ export async function processQuery(
          return { action: 'update_excel_sheet', message: 'Please provide values to append (row data).' };
       }
 
-      await appendExcelRow(msToken, fileInfo.id, values[0]); // Append first row from values
+      await appendExcelRow(msToken, fileInfo.id, values[0]); 
       return { action: 'update_excel_sheet', message: `✅ Added row to "${fileInfo.name}".` };
     }
 
@@ -630,7 +829,33 @@ export async function processQuery(
         data: sheet,
       };
     }
+/* ============================================================================
+       ✅ MICROSOFT TEAMS (NEW)
+       ============================================================================ */
 
+    // 1. Fetch Teams Messages
+    if (intent.action === 'fetch_teams_messages') {
+      if (!msToken) return { action: 'fetch_teams_messages', message: '❌ Please sign in with Microsoft first.' };
+      
+      const messages = await getRecentTeamsMessages(msToken, intent.parameters?.limit ?? 5);
+      return { 
+        action: 'fetch_teams_messages', 
+        message: `✅ Found ${messages.length} recent Teams messages.`, 
+        data: messages 
+      };
+    }
+
+    // 2. Fetch Teams Channels
+    if (intent.action === 'fetch_teams_channels') {
+      if (!msToken) return { action: 'fetch_teams_channels', message: '❌ Please sign in with Microsoft first.' };
+      
+      const channels = await getTeamsChannels(msToken, intent.parameters?.limit ?? 10);
+      return { 
+        action: 'fetch_teams_channels', 
+        message: `✅ Found ${channels.length} channels.`, 
+        data: channels 
+      };
+    }
     /* ================= READ GOOGLE SHEET ================= */
     if (intent.action === 'read_sheet') {
       const { spreadsheetId, title, range } = intent.parameters ?? {};

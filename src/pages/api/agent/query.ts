@@ -47,6 +47,14 @@ export interface AIIntentParameters {
   action?: string;
   userId?: number;
   messageId?: number;
+
+  // ✅ YouTube Parameters
+  query?: string;
+  channelId?: string;
+  channelName?: string;
+
+  // ✅ Forms Parameters
+  formId?: string;
 }
 
 export interface AgentResponseExtended {
@@ -81,10 +89,15 @@ export interface AgentResponseExtended {
     | 'create_excel_sheet'
     | 'read_excel_sheet'
     | 'update_excel_sheet'
-    // ✅ TELEGRAM ACTIONS
+    // TELEGRAM ACTIONS
     | 'fetch_telegram_updates'
     | 'send_telegram_message'
     | 'manage_telegram_group'
+    // ✅ NEW ACTIONS
+    | 'search_youtube'
+    | 'get_channel_stats'
+    | 'create_form'
+    | 'fetch_form_responses'
     | 'help'
     | 'none';
 
@@ -97,7 +110,7 @@ interface QueryRequestBody {
   query: string;
   shopifyConfig?: ShopifyCredentials;
   microsoftTokens?: MicrosoftTokens;
-  telegramToken?: string; // ✅ ADDED
+  telegramToken?: string;
 }
 
 /* ----------------- API Handler ----------------- */
@@ -117,7 +130,6 @@ export default async function handler(
     }
 
     // Determine AI intent & Execute Core Logic (Processor)
-    // ✅ FIX: Pass telegramToken to the processor
     const response = (await processQuery(query, shopifyConfig, microsoftTokens, telegramToken)) as AgentResponseExtended;
 
     // Ensure parameters exist
@@ -182,6 +194,20 @@ export default async function handler(
     if (response.action === 'fetch_students') {
       try { if (response.data) response.message = await generateSummary(response.data, query, 'students'); } catch (e) {}
     }
+
+    /* ----------------- YOUTUBE ----------------- */
+    if (response.action === 'search_youtube') {
+      try { if (response.data) response.message = await generateSummary(response.data, query, 'youtube_videos'); } catch (e) {}
+    }
+    if (response.action === 'get_channel_stats') {
+      try { if (response.data) response.message = await generateSummary(response.data, query, 'youtube_stats'); } catch (e) {}
+    }
+
+    /* ----------------- GOOGLE FORMS ----------------- */
+    if (response.action === 'fetch_form_responses') {
+      try { if (response.data) response.message = await generateSummary(response.data, query, 'form_responses'); } catch (e) {}
+    }
+    // Note: 'create_form' usually has a specific success message from processor, so we might skip summary unless we want AI to rephrase it.
 
     /* =================================================================================
        MICROSOFT INTEGRATIONS

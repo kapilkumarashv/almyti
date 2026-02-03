@@ -8,9 +8,16 @@ export async function createExcelWorkbook(accessToken: string, name: string): Pr
   // Ensure name ends in .xlsx
   const filename = name.endsWith('.xlsx') ? name : `${name}.xlsx`;
 
-  // 1. Upload an empty file to create it
-  // Using the "content" endpoint with an empty body creates a blank file
-  const file = await client.request<any>(`/me/drive/root:/${filename}:/content`, 'PUT', {});
+  // ✅ FIX: Use PUT /content (Same as Word fix)
+  // This forces the file to be created and visible immediately.
+  // Note: It creates a 0-byte file initially. Excel Online will initialize it when you open it.
+  
+  const file = await client.request<any>(
+    `/me/drive/root:/${encodeURIComponent(filename)}:/content`, 
+    'PUT', 
+    '', // Empty content
+    { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+  );
   
   return {
     id: file.id,
@@ -24,15 +31,27 @@ export async function readExcelWorksheet(accessToken: string, fileId: string): P
   const client = new GraphClient(accessToken);
 
   try {
-    // Get the used range from the active worksheet
+    // Attempt to read the used range (cells with data)
     const data = await client.request<any>(`/me/drive/items/${fileId}/workbook/worksheets/Active/usedRange`);
     
     if (!data.values) return [];
 
+    // Map rows to our internal format
     return data.values.map((row: any[]) => ({ values: row }));
-  } catch (error) {
-    console.error('Error reading Excel sheet:', error);
-    return [];
+
+  } catch (error: any) {
+    console.error('Error reading Excel sheet:', error.message);
+    
+    // Fallback: If "ItemNotFound" (Active worksheet missing), return empty.
+    if (error.message.includes('ItemNotFound') || error.message.includes('ResourceNotFound')) {
+      return [];
+    }
+    // If the file is 0-bytes (just created), the API might say it's invalid until opened once.
+    if (error.message.includes('InvalidWorkbook')) {
+      console.warn("Workbook appears empty or uninitialized.");
+      return [];
+    }
+    throw new Error('Failed to read Excel file. It might be empty or corrupt.');
   }
 }
 
@@ -40,42 +59,39 @@ export async function readExcelWorksheet(accessToken: string, fileId: string): P
 export async function appendExcelRow(accessToken: string, fileId: string, values: any[]): Promise<void> {
   const client = new GraphClient(accessToken);
 
-  // We append to the "Active" worksheet. 
-  // We need to determine where to add. A simple way is to get the used range and add below.
-  // OR use table logic if a table exists.
-  
-  // For simplicity: We will just write to a new row at the bottom of the used range.
-  // Note: Microsoft Graph Excel API is strict. It's often easier to treat it as a Table.
-  // BUT to keep it generic, we will just try to update a specific range or look for a table.
-  
-  // STRATEGY: Get Used Range -> Calculate Next Row -> Update
-  // This is complex. Let's use the simplest robust method: Tables.
-  // Check if a table exists, if not create one, then add row.
-  
   try {
-    // 1. List Tables
-    const tables = await client.request<{ value: any[] }>(`/me/drive/items/${fileId}/workbook/worksheets/Active/tables`);
+    // 1. Try to list tables to see if we can append to a known structure
+    let tables: { value: any[] };
+    try {
+      tables = await client.request<{ value: any[] }>(`/me/drive/items/${fileId}/workbook/worksheets/Active/tables`);
+    } catch (e) {
+      // If listing tables fails, the workbook might not be initialized.
+      tables = { value: [] };
+    }
     
     let tableId = '';
 
-    if (tables.value.length === 0) {
-      // Create a table if none exists (Auto-detect size)
-      const table = await client.request<any>(`/me/drive/items/${fileId}/workbook/worksheets/Active/tables/add`, 'POST', {
-        address: 'A1:C1', // Minimal start
+    if (!tables.value || tables.value.length === 0) {
+      // 2. Create a table if none exists
+      // Note: This might fail if the file is truly 0-bytes and hasn't been opened yet.
+      // The API requires a valid Excel structure to add a table.
+      
+      const newTable = await client.request<any>(`/me/drive/items/${fileId}/workbook/worksheets/Active/tables/add`, 'POST', {
+        address: 'A1:C1', 
         hasHeaders: true
       });
-      tableId = table.id;
+      tableId = newTable.id;
     } else {
       tableId = tables.value[0].id;
     }
 
-    // 2. Add Row to Table
+    // 3. Add Row to Table
     await client.request(`/me/drive/items/${fileId}/workbook/tables/${tableId}/rows`, 'POST', {
-      values: [values] // Must be array of arrays
+      values: [values] 
     });
 
-  } catch (error) {
-    console.error('Error appending to Excel:', error);
-    throw new Error('Failed to update Excel file. Ensure it is a valid .xlsx file.');
+  } catch (error: any) {
+    console.error('Error appending to Excel:', error.message);
+    throw new Error('Failed to update Excel file. Ensure the file is a valid .xlsx and not open elsewhere.');
   }
 }

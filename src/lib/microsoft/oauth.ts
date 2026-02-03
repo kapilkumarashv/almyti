@@ -22,13 +22,25 @@ const msalConfig = {
 
 const cca = new ConfidentialClientApplication(msalConfig);
 
-// ✅ FIX: Added 'offline_access' to ensure we get a refresh token
+// ✅ FIX: Added Scopes for Excel, Word, OneDrive, and Teams
 const SCOPES = [
+  // User Profile
   'User.Read', 
+  
+  // Outlook (Mail)
   'Mail.Read', 
-  'ChannelMessage.Read.All', 
-  'Channel.ReadBasic.All', 
-  'Chat.Read', 
+  'Mail.Send', 
+  'Calendars.ReadWrite',
+  // OneDrive / Excel / Word (Files)
+  'Files.ReadWrite', // <--- Critical: Allows reading/writing files in OneDrive (needed for Excel & Word too)
+
+  // Teams
+  'Team.ReadBasic.All',      // <--- List joined Teams
+  'Channel.ReadBasic.All',   // <--- List Channels
+  'ChannelMessage.Read.All', // <--- Read Channel Messages
+  'Chat.Read',               // <--- Read Personal Chats
+  
+  // Auth
   'offline_access' 
 ];
 
@@ -57,7 +69,6 @@ export async function getTokensFromCode(code: string): Promise<MicrosoftTokens> 
   const tokens: MicrosoftTokens = {
     access_token: response.accessToken,
     // ✅ Capture the refresh token (now available thanks to 'offline_access')
-    // Note: MSAL.js often handles caching internally, but we save it explicitly here if provided.
     refresh_token: '', 
     expires_on: response.expiresOn ? response.expiresOn.getTime() : Date.now() + 3600 * 1000,
     scope: response.scopes.join(' '),

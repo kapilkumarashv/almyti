@@ -10,14 +10,18 @@ import {
   TeamsMessage, 
   TeamsChannel,
   TelegramMessage,
-  // ✅ NEW IMPORTS
   OutlookEmail,
   OneDriveFile,
   KeepNote,
   ClassroomCourse,
   ClassroomAssignment,
   ClassroomStudent,
-  SheetRow
+  SheetRow,
+  // ✅ NEW IMPORTS
+  YouTubeVideo,
+  YouTubeChannel,
+  GoogleForm,
+  FormResponse
 } from '@/lib/types';
 
 interface MessageProps {
@@ -52,8 +56,6 @@ function isTelegramMessageArray(data: unknown): data is TelegramMessage[] {
   return Array.isArray(data) && data.length > 0 && 'message_id' in data[0] && 'chat' in data[0];
 }
 
-/* --- ✅ NEW GUARDS --- */
-
 function isOutlookEmailArray(data: unknown): data is OutlookEmail[] {
   return Array.isArray(data) && data.length > 0 && 'bodyPreview' in data[0] && 'receivedDateTime' in data[0];
 }
@@ -81,6 +83,24 @@ function isClassroomStudentArray(data: unknown): data is ClassroomStudent[] {
 function isSheetRowArray(data: unknown): data is SheetRow[] {
   // Checks for Excel/Google Sheet rows
   return Array.isArray(data) && data.length > 0 && 'values' in data[0];
+}
+
+/* --- ✅ NEW TYPE GUARDS --- */
+
+function isYouTubeVideoArray(data: unknown): data is YouTubeVideo[] {
+  return Array.isArray(data) && data.length > 0 && 'videoUrl' in data[0] && 'thumbnailUrl' in data[0];
+}
+
+function isYouTubeChannelArray(data: unknown): data is YouTubeChannel[] {
+  return Array.isArray(data) && data.length > 0 && 'subscriberCount' in data[0] && 'viewCount' in data[0];
+}
+
+function isGoogleFormArray(data: unknown): data is GoogleForm[] {
+  return Array.isArray(data) && data.length > 0 && 'responderUri' in data[0] && 'formId' in data[0];
+}
+
+function isFormResponseArray(data: unknown): data is FormResponse[] {
+  return Array.isArray(data) && data.length > 0 && 'responseId' in data[0] && 'answers' in data[0];
 }
 
 /* =================================================================================
@@ -307,6 +327,104 @@ const Message: React.FC<MessageProps> = ({ message }) => {
               </div>
             </div>
           ))}
+        </div>
+      );
+    }
+
+    /* ---------------- ✅ YOUTUBE INTEGRATION ---------------- */
+
+    // YouTube Videos
+    if (isYouTubeVideoArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          {message.data.map((video) => (
+            <div key={video.id} className={styles.dataItem}>
+              <img 
+                src={video.thumbnailUrl} 
+                alt={video.title} 
+                style={{ width: '100%', borderRadius: '8px', marginBottom: '8px' }} 
+              />
+              <div className={styles.dataItemTitle}>{video.title}</div>
+              <div className={styles.dataItemMeta}>{video.channelTitle} • {new Date(video.publishTime).toLocaleDateString()}</div>
+              <a href={video.videoUrl} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                Watch Video
+              </a>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // YouTube Channels
+    if (isYouTubeChannelArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          {message.data.map((channel) => (
+            <div key={channel.id} className={styles.dataItem} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <img 
+                src={channel.thumbnailUrl} 
+                alt={channel.title} 
+                style={{ width: '50px', height: '50px', borderRadius: '50%' }} 
+              />
+              <div>
+                <div className={styles.dataItemTitle}>{channel.title}</div>
+                <div className={styles.dataItemMeta}>
+                  👥 {parseInt(channel.subscriberCount).toLocaleString()} Subs • 👁 {parseInt(channel.viewCount).toLocaleString()} Views
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* ---------------- ✅ GOOGLE FORMS INTEGRATION ---------------- */
+
+    // Google Forms (Created Form)
+/* src/components/Message.tsx */
+
+// Find the "Google Forms (Created Form)" block and replace it with this:
+
+    if (isGoogleFormArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+          {message.data.map((form) => (
+            <div key={form.formId} className={styles.dataItem} style={{ borderLeft: '4px solid #7248B9' }}>
+              {/* ✅ FIX: Changed form.info.title to form.title */}
+              <div className={styles.dataItemTitle}>{form.title}</div>
+              <div className={styles.dataItemMeta}>ID: {form.formId}</div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <a href={form.responderUri} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                  Fill Form
+                </a>
+                {form.formUri && (
+                  <a href={form.formUri} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                    Edit Form
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Form Responses
+    if (isFormResponseArray(message.data)) {
+      return (
+        <div className={styles.dataContainer}>
+           <div className={styles.dataItem}>
+             <div className={styles.dataItemTitle}>Form Responses ({message.data.length})</div>
+             <ul style={{ paddingLeft: '20px', fontSize: '0.9rem', color: '#666' }}>
+               {message.data.map((resp, i) => (
+                 <li key={resp.responseId} style={{ marginBottom: '8px' }}>
+                   <strong>Submission {i + 1}</strong> ({new Date(resp.lastSubmittedTime).toLocaleDateString()})
+                   <br />
+                   {resp.respondentEmail && <span>By: {resp.respondentEmail}</span>}
+                 </li>
+               ))}
+             </ul>
+           </div>
         </div>
       );
     }
